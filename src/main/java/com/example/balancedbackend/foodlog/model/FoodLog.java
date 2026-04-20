@@ -6,6 +6,7 @@ import java.time.LocalTime;
 public record FoodLog(
         long id,
         long userId,
+        Long logGroupId,
         String name,
         LocalDate date,
         LocalTime time,
@@ -14,5 +15,19 @@ public record FoodLog(
         double carbs,
         double fats
 ) {
+
+    public FoodLog(
+            long id,
+            long userId,
+            String name,
+            LocalDate date,
+            LocalTime time,
+            double calories,
+            double protein,
+            double carbs,
+            double fats
+    ) {
+        this(id, userId, null, name, date, time, calories, protein, carbs, fats);
+    }
 }
 

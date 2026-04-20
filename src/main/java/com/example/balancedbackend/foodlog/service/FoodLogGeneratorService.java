@@ -1,5 +1,6 @@
 package com.example.balancedbackend.foodlog.service;
 
+import com.example.balancedbackend.common.exception.BadRequestException;
 import com.example.balancedbackend.common.exception.ConflictException;
 import com.example.balancedbackend.foodlog.api.dto.FoodLogResponse;
 import com.example.balancedbackend.foodlog.model.FoodLog;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -44,9 +46,10 @@ public class FoodLogGeneratorService {
         this.messagingTemplate = messagingTemplate;
     }
 
-    public GeneratorStatus start(long userId, Integer batchSize, Long intervalMs) {
+    public GeneratorStatus start(long userId, String date, Integer batchSize, Long intervalMs) {
         int resolvedBatchSize = batchSize == null ? DEFAULT_BATCH_SIZE : batchSize;
         long resolvedIntervalMs = intervalMs == null ? DEFAULT_INTERVAL_MS : intervalMs;
+        LocalDate targetDate = parseDate(date);
 
         GeneratorJob existingJob = jobsByUser.get(userId);
         if (existingJob != null && !existingJob.future().isCancelled()) {
@@ -54,13 +57,13 @@ public class FoodLogGeneratorService {
         }
 
         ScheduledFuture<?> future = scheduler.scheduleWithFixedDelay(
-                () -> generateBatch(userId, resolvedBatchSize),
+                () -> generateBatch(userId, targetDate, resolvedBatchSize),
                 0,
                 resolvedIntervalMs,
                 TimeUnit.MILLISECONDS
         );
 
-        jobsByUser.put(userId, new GeneratorJob(future, resolvedBatchSize, resolvedIntervalMs));
+        jobsByUser.put(userId, new GeneratorJob(future, targetDate, resolvedBatchSize, resolvedIntervalMs));
         return new GeneratorStatus(true, resolvedBatchSize, resolvedIntervalMs);
     }
 
@@ -82,13 +85,14 @@ public class FoodLogGeneratorService {
         return new GeneratorStatus(true, job.batchSize(), job.intervalMs());
     }
 
-    private void generateBatch(long userId, int batchSize) {
+    private void generateBatch(long userId, LocalDate targetDate, int batchSize) {
         List<FoodLogResponse> created = new ArrayList<>();
 
         for (int i = 0; i < batchSize; i++) {
             FoodLog draft = new FoodLog(
                     0,
                     userId,
+                    null,
                     faker.options().option(
                             "Chicken Rice Bowl",
                             "Greek Yogurt Snack",
@@ -98,7 +102,7 @@ public class FoodLogGeneratorService {
                             "Tofu Stir Fry",
                             "Egg Wrap"
                     ),
-                    LocalDate.now().minusDays(faker.number().numberBetween(0, 7)),
+                    targetDate,
                     LocalTime.of(
                             faker.number().numberBetween(0, 24),
                             faker.number().numberBetween(0, 60)
@@ -128,9 +132,18 @@ public class FoodLogGeneratorService {
         messagingTemplate.convertAndSend("/topic/food-logs/" + userId, event);
     }
 
+    private LocalDate parseDate(String date) {
+        try {
+            return LocalDate.parse(date);
+        } catch (DateTimeParseException ex) {
+            throw new BadRequestException("date must be in YYYY-MM-DD format");
+        }
+    }
+
     private FoodLogResponse toResponse(FoodLog foodLog) {
         return new FoodLogResponse(
                 foodLog.id(),
+                foodLog.logGroupId(),
                 foodLog.name(),
                 foodLog.date().toString(),
                 foodLog.time().toString(),
@@ -153,6 +166,7 @@ public class FoodLogGeneratorService {
 
     private record GeneratorJob(
             ScheduledFuture<?> future,
+            LocalDate targetDate,
             int batchSize,
             long intervalMs
     ) {

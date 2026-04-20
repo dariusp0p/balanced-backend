@@ -3,6 +3,9 @@ package com.example.balancedbackend.foodlog.service;
 import com.example.balancedbackend.common.exception.NotFoundException;
 import com.example.balancedbackend.foodlog.api.dto.FoodLogRequest;
 import com.example.balancedbackend.foodlog.store.InMemoryFoodLogStore;
+import com.example.balancedbackend.loggroup.api.dto.LogGroupRequest;
+import com.example.balancedbackend.loggroup.service.LogGroupService;
+import com.example.balancedbackend.loggroup.store.InMemoryLogGroupStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -12,10 +15,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class FoodLogServiceTest {
 
     private FoodLogService foodLogService;
+    private LogGroupService logGroupService;
 
     @BeforeEach
     void setUp() {
-        foodLogService = new FoodLogService(new InMemoryFoodLogStore());
+        InMemoryFoodLogStore foodLogStore = new InMemoryFoodLogStore();
+        InMemoryLogGroupStore logGroupStore = new InMemoryLogGroupStore();
+        foodLogService = new FoodLogService(foodLogStore, logGroupStore);
+        logGroupService = new LogGroupService(logGroupStore, foodLogStore);
     }
 
     @Test
@@ -97,5 +104,25 @@ class FoodLogServiceTest {
 
         assertThat(dailyLogs).hasSize(2);
         assertThat(dailyLogs).allMatch(log -> log.date().equals("2024-03-24"));
+    }
+
+    @Test
+    void shouldAssignFoodLogToOwnedGroup() {
+        var group = logGroupService.create(1L, new LogGroupRequest("Lunches", "2024-03-24", false, 0, 0, 0, 0));
+
+        var created = foodLogService.create(1L,
+                new FoodLogRequest("Meal", "2024-03-24", "08:15", group.id(), 220, 18, 28, 4));
+
+        assertThat(created.logGroupId()).isEqualTo(group.id());
+    }
+
+    @Test
+    void shouldRejectGroupFromAnotherUser() {
+        var group = logGroupService.create(2L, new LogGroupRequest("Private", "2024-03-24", false, 0, 0, 0, 0));
+
+        assertThatThrownBy(() -> foodLogService.create(1L,
+                new FoodLogRequest("Meal", "2024-03-24", "08:15", group.id(), 220, 18, 28, 4)))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("Log group not found");
     }
 }

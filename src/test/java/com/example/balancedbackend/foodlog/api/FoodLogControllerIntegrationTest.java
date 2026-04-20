@@ -217,13 +217,22 @@ class FoodLogControllerIntegrationTest {
     @Test
     void shouldStartAndStopGeneratorLoop() throws Exception {
         String token = signUpAndLogin("generator-user@example.com");
+        String targetDate = "2024-03-21";
 
         mockMvc.perform(post("/api/food-logs/generator/start")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"batchSize\":2,\"intervalMs\":500}"))
+                        .content("{\"date\":\"" + targetDate + "\",\"batchSize\":2,\"intervalMs\":500}"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.running").value(true));
+
+        Thread.sleep(700);
+
+        mockMvc.perform(get("/api/food-logs/day")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .param("date", targetDate))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").isNumber());
 
         mockMvc.perform(get("/api/food-logs/generator/status")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))

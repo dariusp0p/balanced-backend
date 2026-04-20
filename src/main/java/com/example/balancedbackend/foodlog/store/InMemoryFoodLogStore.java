@@ -20,6 +20,7 @@ public class InMemoryFoodLogStore {
         FoodLog saved = new FoodLog(
                 id,
                 draft.userId(),
+                draft.logGroupId(),
                 draft.name(),
                 draft.date(),
                 draft.time(),
@@ -43,6 +44,10 @@ public class InMemoryFoodLogStore {
 
     public void delete(long id) {
         logsById.remove(id);
+    }
+
+    public void deleteAllByUserIdAndLogGroupId(long userId, long logGroupId) {
+        logsById.values().removeIf(log -> log.userId() == userId && Long.valueOf(logGroupId).equals(log.logGroupId()));
     }
 
     public List<FoodLog> findAllByUserId(long userId) {

@@ -4,6 +4,8 @@ import com.example.balancedbackend.auth.model.User;
 import com.example.balancedbackend.auth.store.InMemoryUserStore;
 import com.example.balancedbackend.foodlog.model.FoodLog;
 import com.example.balancedbackend.foodlog.store.InMemoryFoodLogStore;
+import com.example.balancedbackend.loggroup.model.LogGroup;
+import com.example.balancedbackend.loggroup.store.InMemoryLogGroupStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,6 +27,7 @@ public class SeedDataConfig {
     @ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true", matchIfMissing = true)
     public ApplicationRunner seedDataRunner(InMemoryUserStore userStore,
                                             InMemoryFoodLogStore foodLogStore,
+                                            InMemoryLogGroupStore logGroupStore,
                                             PasswordEncoder passwordEncoder,
                                             @Value("${app.seed.demo-user.name:Demo User}") String seedName,
                                             @Value("${app.seed.demo-user.email:demo@balanced.local}") String seedEmail,
@@ -36,6 +39,7 @@ public class SeedDataConfig {
 
             User demoUser = userStore.createUser(seedName, seedEmail, passwordEncoder.encode(seedPassword));
             seedLogs(foodLogStore, demoUser.id());
+            seedLogGroups(logGroupStore, demoUser.id());
 
             LOGGER.info("Seeded demo user {} with starter food logs", seedEmail);
         };
@@ -64,5 +68,13 @@ public class SeedDataConfig {
 
         foodLogStore.create(new FoodLog(0, userId, "Cottage Cheese Toast", baseDate.minusDays(6), LocalTime.of(7, 45), 300, 21, 26, 11));
         foodLogStore.create(new FoodLog(0, userId, "Chicken Burrito", baseDate.minusDays(6), LocalTime.of(19, 20), 640, 41, 59, 20));
+    }
+
+    private void seedLogGroups(InMemoryLogGroupStore logGroupStore, long userId) {
+        LocalDate baseDate = LocalDate.now();
+
+        logGroupStore.create(new LogGroup(0, userId, "Today Plan", baseDate, true, 0, 0, 0, 0));
+        logGroupStore.create(new LogGroup(0, userId, "Yesterday Plan", baseDate.minusDays(1), true, 0, 0, 0, 0));
+        logGroupStore.create(new LogGroup(0, userId, "Meal Prep", baseDate.minusDays(2), false, 1600, 110, 170, 52));
     }
 }

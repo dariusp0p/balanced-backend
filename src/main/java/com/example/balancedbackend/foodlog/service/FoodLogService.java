@@ -9,6 +9,8 @@ import com.example.balancedbackend.foodlog.api.dto.MacroDistributionResponse;
 import com.example.balancedbackend.foodlog.api.dto.PagedResponse;
 import com.example.balancedbackend.foodlog.model.FoodLog;
 import com.example.balancedbackend.foodlog.store.InMemoryFoodLogStore;
+import com.example.balancedbackend.loggroup.model.LogGroup;
+import com.example.balancedbackend.loggroup.store.InMemoryLogGroupStore;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -21,15 +23,19 @@ import java.util.List;
 public class FoodLogService {
 
     private final InMemoryFoodLogStore foodLogStore;
+    private final InMemoryLogGroupStore logGroupStore;
 
-    public FoodLogService(InMemoryFoodLogStore foodLogStore) {
+    public FoodLogService(InMemoryFoodLogStore foodLogStore, InMemoryLogGroupStore logGroupStore) {
         this.foodLogStore = foodLogStore;
+        this.logGroupStore = logGroupStore;
     }
 
     public FoodLogResponse create(long userId, FoodLogRequest request) {
+        Long logGroupId = resolveOwnedLogGroupId(userId, request.logGroupId());
         FoodLog draft = new FoodLog(
                 0,
                 userId,
+                logGroupId,
                 request.name().trim(),
                 parseDate(request.date()),
                 parseTime(request.time()),
@@ -80,10 +86,12 @@ public class FoodLogService {
 
     public FoodLogResponse update(long userId, long id, FoodLogRequest request) {
         FoodLog existing = getOwnedFoodLog(userId, id);
+        Long logGroupId = resolveOwnedLogGroupId(userId, request.logGroupId());
 
         FoodLog updated = new FoodLog(
                 existing.id(),
                 existing.userId(),
+                logGroupId,
                 request.name().trim(),
                 parseDate(request.date()),
                 parseTime(request.time()),
@@ -142,6 +150,7 @@ public class FoodLogService {
     private FoodLogResponse toResponse(FoodLog foodLog) {
         return new FoodLogResponse(
                 foodLog.id(),
+                foodLog.logGroupId(),
                 foodLog.name(),
                 foodLog.date().toString(),
                 foodLog.time().toString(),
@@ -150,6 +159,21 @@ public class FoodLogService {
                 round2(foodLog.carbs()),
                 round2(foodLog.fats())
         );
+    }
+
+    private Long resolveOwnedLogGroupId(long userId, Long logGroupId) {
+        if (logGroupId == null) {
+            return null;
+        }
+
+        LogGroup group = logGroupStore.findById(logGroupId)
+                .orElseThrow(() -> new NotFoundException("Log group not found"));
+
+        if (group.userId() != userId) {
+            throw new NotFoundException("Log group not found");
+        }
+
+        return logGroupId;
     }
 
     private LocalDate parseDate(String date) {

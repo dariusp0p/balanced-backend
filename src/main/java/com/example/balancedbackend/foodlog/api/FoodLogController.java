@@ -62,11 +62,10 @@ public class FoodLogController {
     @PostMapping("/generator/start")
     public ResponseEntity<GenerationControlResponse> startGenerator(
             @AuthenticationPrincipal AuthenticatedUser user,
-            @Valid @RequestBody(required = false) GenerationStartRequest request
+            @Valid @RequestBody GenerationStartRequest request
     ) {
-        Integer batchSize = request == null ? null : request.batchSize();
-        Long intervalMs = request == null ? null : request.intervalMs();
-        FoodLogGeneratorService.GeneratorStatus status = foodLogGeneratorService.start(user.id(), batchSize, intervalMs);
+        FoodLogGeneratorService.GeneratorStatus status =
+                foodLogGeneratorService.start(user.id(), request.date(), request.batchSize(), request.intervalMs());
 
         return ResponseEntity.accepted().body(new GenerationControlResponse(
                 status.running(),

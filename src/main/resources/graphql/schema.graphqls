@@ -1,0 +1,46 @@
+type Query {
+  logGroups(page: Int = 0, size: Int = 10): LogGroupPage!
+  logGroup(id: ID!): LogGroup
+  foodLogs(page: Int = 0, size: Int = 10): FoodLogPage!
+  foodLogsByDate(date: String!): [FoodLog!]!
+}
+
+type LogGroup {
+  id: ID!
+  name: String!
+  date: String!
+  computeFromFoodLogs: Boolean!
+  totalCalories: Float!
+  totalProtein: Float!
+  totalCarbs: Float!
+  totalFats: Float!
+}
+
+type LogGroupPage {
+  content: [LogGroup!]!
+  page: Int!
+  size: Int!
+  totalElements: Int!
+  totalPages: Int!
+}
+
+type FoodLog {
+  id: ID!
+  logGroupId: ID
+  name: String!
+  date: String!
+  time: String!
+  calories: Float!
+  protein: Float!
+  carbs: Float!
+  fats: Float!
+}
+
+type FoodLogPage {
+  content: [FoodLog!]!
+  page: Int!
+  size: Int!
+  totalElements: Int!
+  totalPages: Int!
+}
+

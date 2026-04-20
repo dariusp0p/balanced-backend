@@ -32,6 +32,11 @@ The app seeds one demo user and starter logs at startup (configurable in `src/ma
 - `POST /api/food-logs/generator/start`
 - `POST /api/food-logs/generator/stop`
 - `GET /api/food-logs/generator/status`
+- `GET /api/log-groups?page=0&size=10`
+- `POST /api/log-groups`
+- `GET /api/log-groups/{id}`
+- `PUT /api/log-groups/{id}`
+- `DELETE /api/log-groups/{id}`
 
 All `/api/**` endpoints require:
 
@@ -47,6 +52,56 @@ All `/api/**` endpoints require:
   "intervalMs": 3000
 }
 ```
+
+## Log group payload
+
+`POST /api/log-groups` and `PUT /api/log-groups/{id}` use:
+
+```json
+{
+  "name": "Training Day",
+  "date": "2024-03-24",
+  "computeFromFoodLogs": true,
+  "totalCalories": 0,
+  "totalProtein": 0,
+  "totalCarbs": 0,
+  "totalFats": 0
+}
+```
+
+- If `computeFromFoodLogs` is `true`, totals are computed from that user's logs for the same date.
+- If `computeFromFoodLogs` is `false`, totals are returned from the stored values.
+
+## GraphQL reads
+
+GraphQL endpoint:
+
+- `POST /graphql`
+
+All GraphQL queries require `Authorization: Bearer <token>`.
+
+Example query:
+
+```graphql
+query {
+  logGroups(page: 0, size: 10) {
+    totalElements
+    content {
+      id
+      name
+      date
+      totalCalories
+    }
+  }
+}
+```
+
+Available queries:
+
+- `logGroups(page, size)`
+- `logGroup(id)`
+- `foodLogs(page, size)`
+- `foodLogsByDate(date)`
 
 ## WebSocket notifications
 
