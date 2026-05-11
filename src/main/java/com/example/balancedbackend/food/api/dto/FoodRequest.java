@@ -1,30 +1,35 @@
-package com.example.balancedbackend.loggroup.api.dto;
+package com.example.balancedbackend.food.api.dto;
 
-import com.example.balancedbackend.loggroup.model.MealType;
+import com.example.balancedbackend.food.model.FoodSource;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 
-public record LogGroupRequest(
+public record FoodRequest(
         @NotBlank(message = "Name is required")
         String name,
 
-        MealType mealType,
+        String brand,
 
-        @NotBlank(message = "Date is required")
-        String date,
+        FoodSource source,
 
-        boolean computeFromFoodLogs,
+        String externalId,
+
+        Double servingSize,
+
+        String servingUnit,
 
         @PositiveOrZero(message = "Calories must be positive or zero")
-        double totalCalories,
+        double caloriesPer100g,
 
         @PositiveOrZero(message = "Protein must be positive or zero")
-        double totalProtein,
+        double proteinPer100g,
 
         @PositiveOrZero(message = "Carbs must be positive or zero")
-        double totalCarbs,
+        double carbsPer100g,
 
         @PositiveOrZero(message = "Fats must be positive or zero")
-        double totalFats
+        double fatsPer100g,
+
+        String rawSourceJson
 ) {
 }

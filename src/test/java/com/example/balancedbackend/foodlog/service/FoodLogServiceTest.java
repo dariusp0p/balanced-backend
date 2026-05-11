@@ -2,28 +2,28 @@ package com.example.balancedbackend.foodlog.service;
 
 import com.example.balancedbackend.common.exception.NotFoundException;
 import com.example.balancedbackend.foodlog.api.dto.FoodLogRequest;
-import com.example.balancedbackend.foodlog.store.InMemoryFoodLogStore;
 import com.example.balancedbackend.loggroup.api.dto.LogGroupRequest;
 import com.example.balancedbackend.loggroup.service.LogGroupService;
-import com.example.balancedbackend.loggroup.store.InMemoryLogGroupStore;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SpringBootTest(properties = {
+        "app.seed.enabled=false",
+        "spring.datasource.url=jdbc:h2:mem:balanced-foodlog-service;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
+})
+@Transactional
 class FoodLogServiceTest {
 
+    @Autowired
     private FoodLogService foodLogService;
-    private LogGroupService logGroupService;
 
-    @BeforeEach
-    void setUp() {
-        InMemoryFoodLogStore foodLogStore = new InMemoryFoodLogStore();
-        InMemoryLogGroupStore logGroupStore = new InMemoryLogGroupStore();
-        foodLogService = new FoodLogService(foodLogStore, logGroupStore);
-        logGroupService = new LogGroupService(logGroupStore, foodLogStore);
-    }
+    @Autowired
+    private LogGroupService logGroupService;
 
     @Test
     void shouldCreateAndReadFoodLog() {

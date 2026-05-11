@@ -3,11 +3,12 @@ package com.example.balancedbackend.security;
 import com.example.balancedbackend.auth.model.AuthSession;
 import com.example.balancedbackend.auth.model.User;
 import com.example.balancedbackend.auth.store.InMemorySessionStore;
-import com.example.balancedbackend.auth.store.InMemoryUserStore;
+import com.example.balancedbackend.auth.store.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -25,11 +26,11 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final InMemorySessionStore sessionStore;
-    private final InMemoryUserStore userStore;
+    private final UserRepository userRepository;
 
-    public SessionAuthenticationFilter(InMemorySessionStore sessionStore, InMemoryUserStore userStore) {
+    public SessionAuthenticationFilter(InMemorySessionStore sessionStore, UserRepository userRepository) {
         this.sessionStore = sessionStore;
-        this.userStore = userStore;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -40,8 +41,8 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
         String authorization = request.getHeader(AUTHORIZATION_HEADER);
 
         if (authorization != null && authorization.startsWith(BEARER_PREFIX)
@@ -50,12 +51,12 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
             Optional<AuthSession> session = sessionStore.findValidSession(token);
 
             if (session.isPresent()) {
-                Optional<User> user = userStore.findById(session.get().userId());
+                Optional<User> user = userRepository.findById(session.get().userId());
                 if (user.isPresent()) {
                     AuthenticatedUser principal = new AuthenticatedUser(
-                            user.get().id(),
-                            user.get().email(),
-                            user.get().name()
+                            user.get().getId(),
+                            user.get().getEmail(),
+                            user.get().getName()
                     );
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(principal, null, List.of());
@@ -68,4 +69,3 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 }
-

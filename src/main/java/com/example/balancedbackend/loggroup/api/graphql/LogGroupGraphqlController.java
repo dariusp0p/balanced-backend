@@ -7,6 +7,7 @@ import com.example.balancedbackend.foodlog.service.FoodLogService;
 import com.example.balancedbackend.loggroup.api.dto.LogGroupResponse;
 import com.example.balancedbackend.loggroup.api.graphql.dto.FoodLogPageResponse;
 import com.example.balancedbackend.loggroup.api.graphql.dto.LogGroupPageResponse;
+import com.example.balancedbackend.loggroup.model.MealType;
 import com.example.balancedbackend.loggroup.service.LogGroupService;
 import com.example.balancedbackend.security.AuthenticatedUser;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -22,22 +23,29 @@ public class LogGroupGraphqlController {
     private final LogGroupService logGroupService;
     private final FoodLogService foodLogService;
 
-    public LogGroupGraphqlController(LogGroupService logGroupService, FoodLogService foodLogService) {
+    public LogGroupGraphqlController(
+            LogGroupService logGroupService,
+            FoodLogService foodLogService
+    ) {
         this.logGroupService = logGroupService;
         this.foodLogService = foodLogService;
     }
 
     @QueryMapping
     public LogGroupPageResponse logGroups(
+            @Argument String date,
+            @Argument MealType mealType,
             @Argument Integer page,
             @Argument Integer size,
             Authentication authentication
     ) {
         long userId = requireUserId(authentication);
+
         int resolvedPage = page == null ? 0 : page;
         int resolvedSize = size == null ? 10 : size;
-        com.example.balancedbackend.loggroup.api.dto.PagedResponse<LogGroupResponse> result =
-                logGroupService.getAll(userId, resolvedPage, resolvedSize);
+
+        PagedResponse<LogGroupResponse> result =
+                logGroupService.getAll(userId, date, mealType, resolvedPage, resolvedSize);
 
         return new LogGroupPageResponse(
                 result.content(),
@@ -49,7 +57,10 @@ public class LogGroupGraphqlController {
     }
 
     @QueryMapping
-    public LogGroupResponse logGroup(@Argument Long id, Authentication authentication) {
+    public LogGroupResponse logGroup(
+            @Argument Long id,
+            Authentication authentication
+    ) {
         long userId = requireUserId(authentication);
         return logGroupService.getById(userId, id);
     }
@@ -61,9 +72,12 @@ public class LogGroupGraphqlController {
             Authentication authentication
     ) {
         long userId = requireUserId(authentication);
+
         int resolvedPage = page == null ? 0 : page;
         int resolvedSize = size == null ? 10 : size;
-        PagedResponse<FoodLogResponse> result = foodLogService.getAll(userId, resolvedPage, resolvedSize);
+
+        PagedResponse<FoodLogResponse> result =
+                foodLogService.getAll(userId, resolvedPage, resolvedSize);
 
         return new FoodLogPageResponse(
                 result.content(),
@@ -75,7 +89,10 @@ public class LogGroupGraphqlController {
     }
 
     @QueryMapping
-    public List<FoodLogResponse> foodLogsByDate(@Argument String date, Authentication authentication) {
+    public List<FoodLogResponse> foodLogsByDate(
+            @Argument String date,
+            Authentication authentication
+    ) {
         long userId = requireUserId(authentication);
         return foodLogService.getByDay(userId, date);
     }
@@ -88,5 +105,3 @@ public class LogGroupGraphqlController {
         return user.id();
     }
 }
-
-

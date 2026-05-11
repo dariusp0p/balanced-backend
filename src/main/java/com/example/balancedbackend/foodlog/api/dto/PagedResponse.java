@@ -10,4 +10,3 @@ public record PagedResponse<T>(
         int totalPages
 ) {
 }
-

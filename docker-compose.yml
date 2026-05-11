@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: balanced-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: balanced_db
+      POSTGRES_USER: balanced_user
+      POSTGRES_PASSWORD: balanced123
+    ports:
+      - "5432:5432"
+    volumes:
+      - balanced_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  balanced_postgres_data:

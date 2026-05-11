@@ -2,31 +2,26 @@ package com.example.balancedbackend.auth.service;
 
 import com.example.balancedbackend.auth.api.dto.LoginRequest;
 import com.example.balancedbackend.auth.api.dto.SignupRequest;
-import com.example.balancedbackend.auth.store.InMemorySessionStore;
-import com.example.balancedbackend.auth.store.InMemoryUserStore;
 import com.example.balancedbackend.common.exception.BadRequestException;
 import com.example.balancedbackend.common.exception.ConflictException;
 import com.example.balancedbackend.common.exception.UnauthorizedException;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SpringBootTest(properties = {
+        "app.seed.enabled=false",
+        "spring.datasource.url=jdbc:h2:mem:balanced-auth-service;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
+})
+@Transactional
 class AuthServiceTest {
 
+    @Autowired
     private AuthService authService;
-
-    @BeforeEach
-    void setUp() {
-        authService = new AuthService(
-                new InMemoryUserStore(),
-                new InMemorySessionStore(),
-                new BCryptPasswordEncoder(),
-                120
-        );
-    }
 
     @Test
     void signupShouldCreateUser() {
@@ -72,4 +67,3 @@ class AuthServiceTest {
                 .hasMessage("Invalid email or password");
     }
 }
-

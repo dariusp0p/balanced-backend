@@ -1,7 +1,4 @@
-package com.example.balancedbackend.foodlog.service.dto;
-
-import com.example.balancedbackend.foodlog.api.dto.FoodLogResponse;
-import com.example.balancedbackend.foodlog.api.dto.FoodLogStatsResponse;
+package com.example.balancedbackend.foodlog.api.dto;
 
 import java.time.Instant;
 import java.util.List;

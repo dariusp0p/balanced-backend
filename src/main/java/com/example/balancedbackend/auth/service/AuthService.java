@@ -8,7 +8,7 @@ import com.example.balancedbackend.auth.api.dto.UserResponse;
 import com.example.balancedbackend.auth.model.AuthSession;
 import com.example.balancedbackend.auth.model.User;
 import com.example.balancedbackend.auth.store.InMemorySessionStore;
-import com.example.balancedbackend.auth.store.InMemoryUserStore;
+import com.example.balancedbackend.auth.store.UserRepository;
 import com.example.balancedbackend.common.exception.BadRequestException;
 import com.example.balancedbackend.common.exception.ConflictException;
 import com.example.balancedbackend.common.exception.UnauthorizedException;
@@ -18,20 +18,21 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Locale;
 
 @Service
 public class AuthService {
 
-    private final InMemoryUserStore userStore;
+    private final UserRepository userRepository;
     private final InMemorySessionStore sessionStore;
     private final PasswordEncoder passwordEncoder;
     private final long sessionTtlMinutes;
 
-    public AuthService(InMemoryUserStore userStore,
+    public AuthService(UserRepository userRepository,
                        InMemorySessionStore sessionStore,
                        PasswordEncoder passwordEncoder,
                        @Value("${app.security.session-ttl-minutes:480}") long sessionTtlMinutes) {
-        this.userStore = userStore;
+        this.userRepository = userRepository;
         this.sessionStore = sessionStore;
         this.passwordEncoder = passwordEncoder;
         this.sessionTtlMinutes = sessionTtlMinutes;
@@ -42,38 +43,35 @@ public class AuthService {
             throw new BadRequestException("Password and confirmPassword must match");
         }
 
-        if (userStore.findByEmail(request.email()).isPresent()) {
+        String normalizedEmail = normalizeEmail(request.email());
+        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             throw new ConflictException("A user with this email already exists");
         }
 
-        try {
-            User user = userStore.createUser(
-                    request.name(),
-                    request.email(),
-                    passwordEncoder.encode(request.password())
-            );
-            return new SignupResponse("User registered successfully", toUserResponse(user));
-        } catch (IllegalStateException ex) {
-            throw new ConflictException("A user with this email already exists");
-        }
+        User user = new User(request.name(), normalizedEmail, passwordEncoder.encode(request.password()));
+        userRepository.save(user);
+        return new SignupResponse("User registered successfully", toUserResponse(user));
     }
 
     public AuthResponse login(LoginRequest request) {
-        User user = userStore.findByEmail(request.email())
+        User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.email()))
                 .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
 
-        if (!passwordEncoder.matches(request.password(), user.passwordHash())) {
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new UnauthorizedException("Invalid email or password");
         }
 
         Instant expiresAt = Instant.now().plus(sessionTtlMinutes, ChronoUnit.MINUTES);
-        AuthSession session = sessionStore.createSession(user.id(), expiresAt);
+        AuthSession session = sessionStore.createSession(user.getId(), expiresAt);
 
         return new AuthResponse(session.token(), "Bearer", session.expiresAt(), toUserResponse(user));
     }
 
     private UserResponse toUserResponse(User user) {
-        return new UserResponse(user.id(), user.name(), user.email());
+        return new UserResponse(user.getId(), user.getName(), user.getEmail());
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }
 }
-

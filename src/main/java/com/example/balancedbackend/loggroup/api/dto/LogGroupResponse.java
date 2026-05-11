@@ -1,8 +1,11 @@
 package com.example.balancedbackend.loggroup.api.dto;
 
+import com.example.balancedbackend.loggroup.model.MealType;
+
 public record LogGroupResponse(
-        long id,
+        Long id,
         String name,
+        MealType mealType,
         String date,
         boolean computeFromFoodLogs,
         double totalCalories,
@@ -11,4 +14,3 @@ public record LogGroupResponse(
         double totalFats
 ) {
 }
-

@@ -4,8 +4,8 @@ import com.example.balancedbackend.common.exception.BadRequestException;
 import com.example.balancedbackend.common.exception.ConflictException;
 import com.example.balancedbackend.foodlog.api.dto.FoodLogResponse;
 import com.example.balancedbackend.foodlog.model.FoodLog;
-import com.example.balancedbackend.foodlog.service.dto.FoodLogBatchEvent;
-import com.example.balancedbackend.foodlog.store.InMemoryFoodLogStore;
+import com.example.balancedbackend.foodlog.api.dto.FoodLogBatchEvent;
+import com.example.balancedbackend.foodlog.store.FoodLogRepository;
 import jakarta.annotation.PreDestroy;
 import net.datafaker.Faker;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -31,17 +31,17 @@ public class FoodLogGeneratorService {
     private static final int DEFAULT_BATCH_SIZE = 5;
     private static final long DEFAULT_INTERVAL_MS = 3_000L;
 
-    private final InMemoryFoodLogStore foodLogStore;
+    private final FoodLogRepository foodLogRepository;
     private final FoodLogService foodLogService;
     private final SimpMessagingTemplate messagingTemplate;
     private final Faker faker = new Faker();
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private final Map<Long, GeneratorJob> jobsByUser = new ConcurrentHashMap<>();
 
-    public FoodLogGeneratorService(InMemoryFoodLogStore foodLogStore,
+    public FoodLogGeneratorService(FoodLogRepository foodLogRepository,
                                    FoodLogService foodLogService,
                                    SimpMessagingTemplate messagingTemplate) {
-        this.foodLogStore = foodLogStore;
+        this.foodLogRepository = foodLogRepository;
         this.foodLogService = foodLogService;
         this.messagingTemplate = messagingTemplate;
     }
@@ -89,11 +89,11 @@ public class FoodLogGeneratorService {
         List<FoodLogResponse> created = new ArrayList<>();
 
         for (int i = 0; i < batchSize; i++) {
-            FoodLog draft = new FoodLog(
-                    0,
-                    userId,
-                    null,
-                    faker.options().option(
+            FoodLog draft = FoodLog.builder()
+                    .userId(userId)
+                    .groupId(null)
+                    .foodId(null)
+                    .name(faker.options().option(
                             "Chicken Rice Bowl",
                             "Greek Yogurt Snack",
                             "Protein Oatmeal",
@@ -101,19 +101,21 @@ public class FoodLogGeneratorService {
                             "Turkey Sandwich",
                             "Tofu Stir Fry",
                             "Egg Wrap"
-                    ),
-                    targetDate,
-                    LocalTime.of(
+                    ))
+                    .date(targetDate)
+                    .time(LocalTime.of(
                             faker.number().numberBetween(0, 24),
                             faker.number().numberBetween(0, 60)
-                    ),
-                    faker.number().numberBetween(120, 900),
-                    faker.number().numberBetween(8, 65),
-                    faker.number().numberBetween(10, 95),
-                    faker.number().numberBetween(3, 40)
-            );
+                    ))
+                    .quantity(1.0)
+                    .unit("serving")
+                    .calories(faker.number().numberBetween(120, 900))
+                    .protein(faker.number().numberBetween(8, 65))
+                    .carbs(faker.number().numberBetween(10, 95))
+                    .fats(faker.number().numberBetween(3, 40))
+                    .build();
 
-            FoodLog saved = foodLogStore.create(draft);
+            FoodLog saved = foodLogRepository.save(draft);
             created.add(toResponse(saved));
         }
 
@@ -142,15 +144,19 @@ public class FoodLogGeneratorService {
 
     private FoodLogResponse toResponse(FoodLog foodLog) {
         return new FoodLogResponse(
-                foodLog.id(),
-                foodLog.logGroupId(),
-                foodLog.name(),
-                foodLog.date().toString(),
-                foodLog.time().toString(),
-                round2(foodLog.calories()),
-                round2(foodLog.protein()),
-                round2(foodLog.carbs()),
-                round2(foodLog.fats())
+                foodLog.getId(),
+                foodLog.getGroupId(),
+                foodLog.getFoodId(),
+                foodLog.getName(),
+                foodLog.getDate().toString(),
+                foodLog.getTime().toString(),
+                round2(foodLog.getQuantity()),
+                foodLog.getUnit(),
+                round2(foodLog.getCalories()),
+                round2(foodLog.getProtein()),
+                round2(foodLog.getCarbs()),
+                round2(foodLog.getFats()),
+                foodLog.getNotes()
         );
     }
 

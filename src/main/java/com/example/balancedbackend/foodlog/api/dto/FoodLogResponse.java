@@ -1,28 +1,18 @@
 package com.example.balancedbackend.foodlog.api.dto;
 
 public record FoodLogResponse(
-        long id,
+        Long id,
         Long logGroupId,
+        Long foodId,
         String name,
         String date,
         String time,
+        double quantity,
+        String unit,
         double calories,
         double protein,
         double carbs,
-        double fats
+        double fats,
+        String notes
 ) {
-
-    public FoodLogResponse(
-            long id,
-            String name,
-            String date,
-            String time,
-            double calories,
-            double protein,
-            double carbs,
-            double fats
-    ) {
-        this(id, null, name, date, time, calories, protein, carbs, fats);
-    }
 }
-
