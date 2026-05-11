@@ -83,14 +83,6 @@ public class LogGroupService {
                 .map(this::toResponse)
                 .toList();
 
-        String filters = date != null && !date.isBlank()
-                ? " date " + parseDate(date)
-                : mealType != null ? " mealType " + mealType : "";
-        auditService.logAction(
-                userId,
-                "Viewed log groups page " + result.getNumber() + " size " + result.getSize() + filters
-        );
-
         return new PagedResponse<>(
                 content,
                 result.getNumber(),
@@ -102,7 +94,6 @@ public class LogGroupService {
 
     public LogGroupResponse getById(long userId, long id) {
         LogGroup group = getOwnedGroup(userId, id);
-        auditService.logAction(userId, "Viewed log group " + group.getId() + " (" + group.getName() + ")");
         return toResponse(group);
     }
 
@@ -119,10 +110,7 @@ public class LogGroupService {
                     createDefaultGroup(userId, selectedDate, "Dinner", MealType.DINNER),
                     createDefaultGroup(userId, selectedDate, "Snacks", MealType.SNACK)
             ));
-            auditService.logAction(userId, "Created default daily groups for " + selectedDate);
         }
-
-        auditService.logAction(userId, "Viewed daily log groups for " + selectedDate);
 
         return logGroupRepository.findAllByUserIdAndDateOrderByIdAsc(userId, selectedDate)
                 .stream()
