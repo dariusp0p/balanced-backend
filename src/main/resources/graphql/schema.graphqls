@@ -18,6 +18,14 @@ type DailyLog {
   date: String!
   logGroups: [LogGroup!]!
   foodLogs: [FoodLog!]!
+  dailyNutritionTarget: DailyNutritionTarget!
+}
+
+type DailyNutritionTarget {
+  calories: Float!
+  protein: Float!
+  carbs: Float!
+  fats: Float!
 }
 
 type LogGroup {

@@ -46,6 +46,22 @@ public class User {
     @Builder.Default
     private boolean admin = false;
 
+    @Column(name = "daily_calorie_target", nullable = false)
+    @Builder.Default
+    private double dailyCalorieTarget = 2000;
+
+    @Column(name = "daily_protein_target", nullable = false)
+    @Builder.Default
+    private double dailyProteinTarget = 150;
+
+    @Column(name = "daily_carbs_target", nullable = false)
+    @Builder.Default
+    private double dailyCarbsTarget = 250;
+
+    @Column(name = "daily_fats_target", nullable = false)
+    @Builder.Default
+    private double dailyFatsTarget = 70;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -56,6 +72,10 @@ public class User {
         this.email = normalizeEmail(email);
         this.passwordHash = passwordHash;
         this.admin = false;
+        this.dailyCalorieTarget = 2000;
+        this.dailyProteinTarget = 150;
+        this.dailyCarbsTarget = 250;
+        this.dailyFatsTarget = 70;
         this.createdAt = Instant.now();
     }
 

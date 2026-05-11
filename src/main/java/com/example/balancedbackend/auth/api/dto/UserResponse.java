@@ -7,6 +7,7 @@ public record UserResponse(
         String name,
         String email,
         boolean admin,
-        List<String> roles
+        List<String> roles,
+        DailyNutritionTargetResponse dailyNutritionTarget
 ) {
 }

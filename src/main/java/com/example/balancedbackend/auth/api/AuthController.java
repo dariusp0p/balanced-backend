@@ -1,6 +1,8 @@
 package com.example.balancedbackend.auth.api;
 
 import com.example.balancedbackend.auth.api.dto.AuthResponse;
+import com.example.balancedbackend.auth.api.dto.DailyNutritionTargetRequest;
+import com.example.balancedbackend.auth.api.dto.DailyNutritionTargetResponse;
 import com.example.balancedbackend.auth.api.dto.LoginRequest;
 import com.example.balancedbackend.auth.api.dto.SignupRequest;
 import com.example.balancedbackend.auth.api.dto.SignupResponse;
@@ -15,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -55,7 +58,26 @@ public class AuthController {
                 user.getName(),
                 user.getEmail(),
                 user.isAdmin(),
-                roleRepository.findRoleNamesByUserId(user.getId())
+                roleRepository.findRoleNamesByUserId(user.getId()),
+                AuthService.toDailyNutritionTargetResponse(user)
+        );
+    }
+
+    @PutMapping("/me/daily-nutrition-target")
+    public DailyNutritionTargetResponse updateDailyNutritionTarget(
+            Authentication authentication,
+            @Valid @RequestBody DailyNutritionTargetRequest request
+    ) {
+        return authService.updateDailyNutritionTarget(
+                securitySupport.requireUserId(authentication),
+                request
+        );
+    }
+
+    @GetMapping("/me/daily-nutrition-target")
+    public DailyNutritionTargetResponse dailyNutritionTarget(Authentication authentication) {
+        return authService.getDailyNutritionTarget(
+                securitySupport.requireUserId(authentication)
         );
     }
 }

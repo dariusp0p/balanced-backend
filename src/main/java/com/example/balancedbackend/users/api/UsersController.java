@@ -4,6 +4,7 @@ import com.example.balancedbackend.auth.api.dto.UserResponse;
 import com.example.balancedbackend.auth.model.User;
 import com.example.balancedbackend.auth.store.RoleRepository;
 import com.example.balancedbackend.auth.store.UserRepository;
+import com.example.balancedbackend.auth.service.AuthService;
 import com.example.balancedbackend.common.security.SecuritySupport;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,7 +46,8 @@ public class UsersController {
                 user.getName(),
                 user.getEmail(),
                 user.isAdmin(),
-                roleRepository.findRoleNamesByUserId(user.getId())
+                roleRepository.findRoleNamesByUserId(user.getId()),
+                AuthService.toDailyNutritionTargetResponse(user)
         );
     }
 }

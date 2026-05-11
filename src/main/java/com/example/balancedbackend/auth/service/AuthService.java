@@ -2,6 +2,8 @@ package com.example.balancedbackend.auth.service;
 
 import com.example.balancedbackend.audit.service.AuditService;
 import com.example.balancedbackend.auth.api.dto.AuthResponse;
+import com.example.balancedbackend.auth.api.dto.DailyNutritionTargetRequest;
+import com.example.balancedbackend.auth.api.dto.DailyNutritionTargetResponse;
 import com.example.balancedbackend.auth.api.dto.LoginRequest;
 import com.example.balancedbackend.auth.api.dto.SignupRequest;
 import com.example.balancedbackend.auth.api.dto.SignupResponse;
@@ -84,13 +86,50 @@ public class AuthService {
         return new AuthResponse(session.token(), "Bearer", session.expiresAt(), toUserResponse(user));
     }
 
+    public DailyNutritionTargetResponse updateDailyNutritionTarget(long userId, DailyNutritionTargetRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UnauthorizedException("Unauthorized"));
+
+        user.setDailyCalorieTarget(request.calories());
+        user.setDailyProteinTarget(request.protein());
+        user.setDailyCarbsTarget(request.carbs());
+        user.setDailyFatsTarget(request.fats());
+        userRepository.save(user);
+
+        auditService.logAction(
+                userId,
+                "Updated daily nutrition target to calories=" + request.calories()
+                        + ", protein=" + request.protein()
+                        + ", carbs=" + request.carbs()
+                        + ", fats=" + request.fats()
+        );
+
+        return toDailyNutritionTargetResponse(user);
+    }
+
+    public DailyNutritionTargetResponse getDailyNutritionTarget(long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UnauthorizedException("Unauthorized"));
+        return toDailyNutritionTargetResponse(user);
+    }
+
     private UserResponse toUserResponse(User user) {
         return new UserResponse(
                 user.getId(),
                 user.getName(),
                 user.getEmail(),
                 user.isAdmin(),
-                roleRepository.findRoleNamesByUserId(user.getId())
+                roleRepository.findRoleNamesByUserId(user.getId()),
+                toDailyNutritionTargetResponse(user)
+        );
+    }
+
+    public static DailyNutritionTargetResponse toDailyNutritionTargetResponse(User user) {
+        return new DailyNutritionTargetResponse(
+                user.getDailyCalorieTarget(),
+                user.getDailyProteinTarget(),
+                user.getDailyCarbsTarget(),
+                user.getDailyFatsTarget()
         );
     }
 
