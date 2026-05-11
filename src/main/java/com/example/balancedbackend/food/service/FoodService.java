@@ -1,5 +1,6 @@
 package com.example.balancedbackend.food.service;
 
+import com.example.balancedbackend.audit.service.AuditService;
 import com.example.balancedbackend.common.exception.BadRequestException;
 import com.example.balancedbackend.common.exception.NotFoundException;
 import com.example.balancedbackend.food.api.dto.FoodRequest;
@@ -19,9 +20,11 @@ import java.util.List;
 public class FoodService {
 
     private final FoodRepository foodRepository;
+    private final AuditService auditService;
 
-    public FoodService(FoodRepository foodRepository) {
+    public FoodService(FoodRepository foodRepository, AuditService auditService) {
         this.foodRepository = foodRepository;
+        this.auditService = auditService;
     }
 
     public FoodResponse create(long userId, FoodRequest request) {
@@ -42,7 +45,9 @@ public class FoodService {
                 .createdByUserId(userId)
                 .build();
 
-        return toResponse(foodRepository.save(food));
+        Food saved = foodRepository.save(food);
+        auditService.logAction(userId, "Created food " + saved.getId() + " (" + saved.getName() + ")");
+        return toResponse(saved);
     }
 
     public PagedResponse<FoodResponse> getAll(long userId, String query, int page, int size) {
@@ -99,7 +104,9 @@ public class FoodService {
         food.setFatsPer100g(request.fatsPer100g());
         food.setRawSourceJson(request.rawSourceJson());
 
-        return toResponse(foodRepository.save(food));
+        Food saved = foodRepository.save(food);
+        auditService.logAction(userId, "Updated food " + saved.getId() + " (" + saved.getName() + ")");
+        return toResponse(saved);
     }
 
     public void delete(long userId, long id) {
@@ -107,6 +114,7 @@ public class FoodService {
                 .orElseThrow(() -> new NotFoundException("Food not found"));
 
         foodRepository.delete(food);
+        auditService.logAction(userId, "Deleted food " + id + " (" + food.getName() + ")");
     }
 
     private void validateFoodRequest(FoodRequest request) {

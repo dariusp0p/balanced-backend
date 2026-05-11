@@ -14,7 +14,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "app.seed.enabled=false",
+        "spring.flyway.enabled=false"
+})
 @AutoConfigureMockMvc
 class LogGroupGraphqlIntegrationTest {
 
@@ -26,23 +29,25 @@ class LogGroupGraphqlIntegrationTest {
 
     @Test
     void shouldReadLogGroupsAndFoodLogsViaGraphql() throws Exception {
-        String token = signUpAndLogin("graphql-user@example.com");
+        TestSession session = signUpAndLogin("graphql-user@example.com");
 
         String groupBody = mockMvc.perform(post("/api/log-groups")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
+                        .param("userId", String.valueOf(session.userId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(logGroupPayload("GraphQL Day", "2024-03-24", true, 0, 0, 0, 0)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
         long groupId = objectMapper.readTree(groupBody).get("id").asLong();
 
         mockMvc.perform(post("/api/food-logs")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
+                        .param("userId", String.valueOf(session.userId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(foodPayload("Breakfast", "2024-03-24", "08:15", groupId, 220, 18, 28, 4)))
-                .andExpect(status().isCreated());
+                .andExpect(status().isOk());
 
         String groupsQuery = """
                 {
@@ -51,7 +56,7 @@ class LogGroupGraphqlIntegrationTest {
                 """;
 
         mockMvc.perform(post("/graphql")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(groupsQuery))
                 .andExpect(status().isOk())
@@ -66,12 +71,44 @@ class LogGroupGraphqlIntegrationTest {
                 """;
 
         mockMvc.perform(post("/graphql")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(logsQuery))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.foodLogsByDate[0].name").value("Breakfast"))
                 .andExpect(jsonPath("$.data.foodLogsByDate[0].calories").value(220.0));
+    }
+
+    @Test
+    void shouldReadDailyLogAndCreateDefaultGroupsForNewDay() throws Exception {
+        TestSession session = signUpAndLogin("graphql-daily-user@example.com");
+
+        String dailyQuery = """
+                {
+                  \"query\":\"query { dailyLog(date: \\\"2024-04-05\\\") { date foodLogs { name } logGroups { name mealType totalCalories } } }\"
+                }
+                """;
+
+        mockMvc.perform(post("/graphql")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dailyQuery))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dailyLog.date").value("2024-04-05"))
+                .andExpect(jsonPath("$.data.dailyLog.foodLogs.length()").value(0))
+                .andExpect(jsonPath("$.data.dailyLog.logGroups.length()").value(4))
+                .andExpect(jsonPath("$.data.dailyLog.logGroups[0].name").value("Breakfast"))
+                .andExpect(jsonPath("$.data.dailyLog.logGroups[0].mealType").value("BREAKFAST"))
+                .andExpect(jsonPath("$.data.dailyLog.logGroups[1].name").value("Lunch"))
+                .andExpect(jsonPath("$.data.dailyLog.logGroups[2].name").value("Dinner"))
+                .andExpect(jsonPath("$.data.dailyLog.logGroups[3].name").value("Snacks"));
+
+        mockMvc.perform(post("/graphql")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dailyQuery))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dailyLog.logGroups.length()").value(4));
     }
 
     @Test
@@ -88,7 +125,7 @@ class LogGroupGraphqlIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    private String signUpAndLogin(String email) throws Exception {
+    private TestSession signUpAndLogin(String email) throws Exception {
         String signupPayload = """
                 {
                   "name":"Test User",
@@ -119,7 +156,10 @@ class LogGroupGraphqlIntegrationTest {
                 .getContentAsString();
 
         JsonNode json = objectMapper.readTree(responseBody);
-        return json.get("token").asText();
+        return new TestSession(json.get("token").asText(), json.get("user").get("id").asLong());
+    }
+
+    private record TestSession(String token, long userId) {
     }
 
     private String logGroupPayload(String name,
@@ -164,4 +204,3 @@ class LogGroupGraphqlIntegrationTest {
                 """.formatted(name, date, time, logGroupId == null ? "null" : logGroupId, calories, protein, carbs, fats);
     }
 }
-

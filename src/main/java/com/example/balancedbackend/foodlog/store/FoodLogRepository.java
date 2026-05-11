@@ -17,6 +17,8 @@ public interface FoodLogRepository extends JpaRepository<FoodLog, Long> {
 
     List<FoodLog> findAllByUserIdAndDateOrderByTimeDescIdDesc(Long userId, LocalDate date);
 
+    boolean existsByUserIdAndDate(Long userId, LocalDate date);
+
     List<FoodLog> findAllByUserIdAndGroupId(Long userId, Long groupId);
 
     Optional<FoodLog> findByIdAndUserId(Long id, Long userId);

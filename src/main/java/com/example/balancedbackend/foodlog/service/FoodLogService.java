@@ -1,5 +1,6 @@
 package com.example.balancedbackend.foodlog.service;
 
+import com.example.balancedbackend.audit.service.AuditService;
 import com.example.balancedbackend.common.exception.BadRequestException;
 import com.example.balancedbackend.common.exception.NotFoundException;
 import com.example.balancedbackend.food.store.FoodRepository;
@@ -21,15 +22,18 @@ public class FoodLogService {
     private final FoodLogRepository foodLogRepository;
     private final LogGroupRepository logGroupRepository;
     private final FoodRepository foodRepository;
+    private final AuditService auditService;
 
     public FoodLogService(
             FoodLogRepository foodLogRepository,
             LogGroupRepository logGroupRepository,
-            FoodRepository foodRepository
+            FoodRepository foodRepository,
+            AuditService auditService
     ) {
         this.foodLogRepository = foodLogRepository;
         this.logGroupRepository = logGroupRepository;
         this.foodRepository = foodRepository;
+        this.auditService = auditService;
     }
 
     public FoodLogResponse create(long userId, FoodLogRequest request) {
@@ -54,7 +58,10 @@ public class FoodLogService {
                 .notes(cleanNullable(request.notes()))
                 .build();
 
-        return toResponse(foodLogRepository.save(foodLog));
+        FoodLog saved = foodLogRepository.save(foodLog);
+        auditService.logAction(userId, "Created food log " + saved.getId() + " (" + saved.getName() + ")");
+        observeIfDailyCaloriesAreSuspicious(userId, saved.getDate());
+        return toResponse(saved);
     }
 
     public PagedResponse<FoodLogResponse> getAll(long userId, int page, int size) {
@@ -118,12 +125,16 @@ public class FoodLogService {
         existing.setFats(request.fats());
         existing.setNotes(cleanNullable(request.notes()));
 
-        return toResponse(foodLogRepository.save(existing));
+        FoodLog saved = foodLogRepository.save(existing);
+        auditService.logAction(userId, "Updated food log " + saved.getId() + " (" + saved.getName() + ")");
+        observeIfDailyCaloriesAreSuspicious(userId, saved.getDate());
+        return toResponse(saved);
     }
 
     public void delete(long userId, long id) {
         FoodLog existing = getOwnedFoodLog(userId, id);
         foodLogRepository.delete(existing);
+        auditService.logAction(userId, "Deleted food log " + id + " (" + existing.getName() + ")");
     }
 
     public FoodLogStatsResponse getStats(long userId) {
@@ -157,6 +168,19 @@ public class FoodLogService {
     private FoodLog getOwnedFoodLog(long userId, long id) {
         return foodLogRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new NotFoundException("Food log not found"));
+    }
+
+    private void observeIfDailyCaloriesAreSuspicious(long userId, LocalDate date) {
+        double dailyCalories = foodLogRepository.findAllByUserIdAndDateOrderByTimeDescIdDesc(userId, date)
+                .stream()
+                .mapToDouble(FoodLog::getCalories)
+                .sum();
+
+        if (dailyCalories > 10_000) {
+            String reason = "Logged " + round2(dailyCalories) + " calories on " + date;
+            auditService.observeUser(userId, reason);
+            auditService.logAction(userId, "Marked observed: " + reason);
+        }
     }
 
     private Long resolveOwnedLogGroupId(long userId, Long groupId) {

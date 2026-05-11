@@ -6,9 +6,13 @@ import com.example.balancedbackend.auth.api.dto.SignupRequest;
 import com.example.balancedbackend.auth.api.dto.SignupResponse;
 import com.example.balancedbackend.auth.api.dto.UserResponse;
 import com.example.balancedbackend.auth.model.AuthSession;
+import com.example.balancedbackend.auth.model.Role;
 import com.example.balancedbackend.auth.model.User;
+import com.example.balancedbackend.auth.model.UserRole;
 import com.example.balancedbackend.auth.store.InMemorySessionStore;
+import com.example.balancedbackend.auth.store.RoleRepository;
 import com.example.balancedbackend.auth.store.UserRepository;
+import com.example.balancedbackend.auth.store.UserRoleRepository;
 import com.example.balancedbackend.common.exception.BadRequestException;
 import com.example.balancedbackend.common.exception.ConflictException;
 import com.example.balancedbackend.common.exception.UnauthorizedException;
@@ -24,15 +28,21 @@ import java.util.Locale;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final UserRoleRepository userRoleRepository;
     private final InMemorySessionStore sessionStore;
     private final PasswordEncoder passwordEncoder;
     private final long sessionTtlMinutes;
 
     public AuthService(UserRepository userRepository,
+                       RoleRepository roleRepository,
+                       UserRoleRepository userRoleRepository,
                        InMemorySessionStore sessionStore,
                        PasswordEncoder passwordEncoder,
                        @Value("${app.security.session-ttl-minutes:480}") long sessionTtlMinutes) {
         this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
+        this.userRoleRepository = userRoleRepository;
         this.sessionStore = sessionStore;
         this.passwordEncoder = passwordEncoder;
         this.sessionTtlMinutes = sessionTtlMinutes;
@@ -50,6 +60,7 @@ public class AuthService {
 
         User user = new User(request.name(), normalizedEmail, passwordEncoder.encode(request.password()));
         userRepository.save(user);
+        assignDefaultRole(user);
         return new SignupResponse("User registered successfully", toUserResponse(user));
     }
 
@@ -68,7 +79,24 @@ public class AuthService {
     }
 
     private UserResponse toUserResponse(User user) {
-        return new UserResponse(user.getId(), user.getName(), user.getEmail());
+        return new UserResponse(
+                user.getId(),
+                user.getName(),
+                user.getEmail(),
+                user.isAdmin(),
+                roleRepository.findRoleNamesByUserId(user.getId())
+        );
+    }
+
+    private void assignDefaultRole(User user) {
+        Role role = roleRepository.findByName(user.isAdmin() ? "ADMIN" : "USER")
+                .orElse(null);
+        if (role == null) return;
+
+        UserRole userRole = new UserRole();
+        userRole.setUserId(user.getId());
+        userRole.setRoleId(role.getId());
+        userRoleRepository.save(userRole);
     }
 
     private String normalizeEmail(String email) {

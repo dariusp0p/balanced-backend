@@ -1,10 +1,13 @@
 package com.example.balancedbackend.food.api;
 
+import com.example.balancedbackend.common.exception.UnauthorizedException;
 import com.example.balancedbackend.food.api.dto.FoodRequest;
 import com.example.balancedbackend.food.api.dto.FoodResponse;
 import com.example.balancedbackend.food.service.FoodService;
 import com.example.balancedbackend.foodlog.api.dto.PagedResponse;
+import com.example.balancedbackend.security.AuthenticatedUser;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -19,44 +22,52 @@ public class FoodController {
 
     @PostMapping
     public FoodResponse create(
-            @RequestParam long userId,
+            Authentication authentication,
             @Valid @RequestBody FoodRequest request
     ) {
-        return foodService.create(userId, request);
+        return foodService.create(requireUserId(authentication), request);
     }
 
     @GetMapping
     public PagedResponse<FoodResponse> getAll(
-            @RequestParam long userId,
+            Authentication authentication,
             @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return foodService.getAll(userId, query, page, size);
+        return foodService.getAll(requireUserId(authentication), query, page, size);
     }
 
     @GetMapping("/{id}")
     public FoodResponse getById(
-            @RequestParam long userId,
+            Authentication authentication,
             @PathVariable long id
     ) {
-        return foodService.getById(userId, id);
+        return foodService.getById(requireUserId(authentication), id);
     }
 
     @PutMapping("/{id}")
     public FoodResponse update(
-            @RequestParam long userId,
+            Authentication authentication,
             @PathVariable long id,
             @Valid @RequestBody FoodRequest request
     ) {
-        return foodService.update(userId, id, request);
+        return foodService.update(requireUserId(authentication), id, request);
     }
 
     @DeleteMapping("/{id}")
     public void delete(
-            @RequestParam long userId,
+            Authentication authentication,
             @PathVariable long id
     ) {
-        foodService.delete(userId, id);
+        foodService.delete(requireUserId(authentication), id);
+    }
+
+    private long requireUserId(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof AuthenticatedUser user)) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+
+        return user.id();
     }
 }

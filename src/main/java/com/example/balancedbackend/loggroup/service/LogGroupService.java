@@ -1,5 +1,6 @@
 package com.example.balancedbackend.loggroup.service;
 
+import com.example.balancedbackend.audit.service.AuditService;
 import com.example.balancedbackend.common.exception.BadRequestException;
 import com.example.balancedbackend.common.exception.NotFoundException;
 import com.example.balancedbackend.foodlog.api.dto.PagedResponse;
@@ -23,10 +24,16 @@ public class LogGroupService {
 
     private final LogGroupRepository logGroupRepository;
     private final FoodLogRepository foodLogRepository;
+    private final AuditService auditService;
 
-    public LogGroupService(LogGroupRepository logGroupRepository, FoodLogRepository foodLogRepository) {
+    public LogGroupService(
+            LogGroupRepository logGroupRepository,
+            FoodLogRepository foodLogRepository,
+            AuditService auditService
+    ) {
         this.logGroupRepository = logGroupRepository;
         this.foodLogRepository = foodLogRepository;
+        this.auditService = auditService;
     }
 
     public LogGroupResponse create(long userId, LogGroupRequest request) {
@@ -44,7 +51,9 @@ public class LogGroupService {
                 .totalFats(request.totalFats())
                 .build();
 
-        return toResponse(logGroupRepository.save(group));
+        LogGroup saved = logGroupRepository.save(group);
+        auditService.logAction(userId, "Created log group " + saved.getId() + " (" + saved.getName() + ")");
+        return toResponse(saved);
     }
 
     public PagedResponse<LogGroupResponse> getAll(
@@ -87,6 +96,28 @@ public class LogGroupService {
         return toResponse(getOwnedGroup(userId, id));
     }
 
+    @Transactional
+    public List<LogGroupResponse> ensureDefaultGroupsForEmptyDay(long userId, String date) {
+        LocalDate selectedDate = parseDate(date);
+        boolean hasGroups = logGroupRepository.existsByUserIdAndDate(userId, selectedDate);
+        boolean hasLogs = foodLogRepository.existsByUserIdAndDate(userId, selectedDate);
+
+        if (!hasGroups && !hasLogs) {
+            logGroupRepository.saveAll(List.of(
+                    createDefaultGroup(userId, selectedDate, "Breakfast", MealType.BREAKFAST),
+                    createDefaultGroup(userId, selectedDate, "Lunch", MealType.LUNCH),
+                    createDefaultGroup(userId, selectedDate, "Dinner", MealType.DINNER),
+                    createDefaultGroup(userId, selectedDate, "Snacks", MealType.SNACK)
+            ));
+            auditService.logAction(userId, "Created default daily groups for " + selectedDate);
+        }
+
+        return logGroupRepository.findAllByUserIdAndDateOrderByIdAsc(userId, selectedDate)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     public LogGroupResponse update(long userId, long id, LogGroupRequest request) {
         validateRequest(request);
 
@@ -101,7 +132,9 @@ public class LogGroupService {
         group.setTotalCarbs(request.totalCarbs());
         group.setTotalFats(request.totalFats());
 
-        return toResponse(logGroupRepository.save(group));
+        LogGroup saved = logGroupRepository.save(group);
+        auditService.logAction(userId, "Updated log group " + saved.getId() + " (" + saved.getName() + ")");
+        return toResponse(saved);
     }
 
     @Transactional
@@ -110,11 +143,26 @@ public class LogGroupService {
 
         foodLogRepository.deleteAllByUserIdAndGroupId(userId, group.getId());
         logGroupRepository.delete(group);
+        auditService.logAction(userId, "Deleted log group " + id + " (" + group.getName() + ")");
     }
 
     private LogGroup getOwnedGroup(long userId, long id) {
         return logGroupRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new NotFoundException("Log group not found"));
+    }
+
+    private LogGroup createDefaultGroup(long userId, LocalDate date, String name, MealType mealType) {
+        return LogGroup.builder()
+                .userId(userId)
+                .name(name)
+                .mealType(mealType)
+                .date(date)
+                .computeFromFoodLogs(true)
+                .totalCalories(0)
+                .totalProtein(0)
+                .totalCarbs(0)
+                .totalFats(0)
+                .build();
     }
 
     private LogGroupResponse toResponse(LogGroup group) {

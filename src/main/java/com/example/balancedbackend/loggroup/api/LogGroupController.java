@@ -1,11 +1,14 @@
 package com.example.balancedbackend.loggroup.api;
 
+import com.example.balancedbackend.common.exception.UnauthorizedException;
 import com.example.balancedbackend.foodlog.api.dto.PagedResponse;
 import com.example.balancedbackend.loggroup.api.dto.LogGroupRequest;
 import com.example.balancedbackend.loggroup.api.dto.LogGroupResponse;
 import com.example.balancedbackend.loggroup.model.MealType;
 import com.example.balancedbackend.loggroup.service.LogGroupService;
+import com.example.balancedbackend.security.AuthenticatedUser;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -20,45 +23,53 @@ public class LogGroupController {
 
     @PostMapping
     public LogGroupResponse create(
-            @RequestParam long userId,
+            Authentication authentication,
             @Valid @RequestBody LogGroupRequest request
     ) {
-        return logGroupService.create(userId, request);
+        return logGroupService.create(requireUserId(authentication), request);
     }
 
     @GetMapping
     public PagedResponse<LogGroupResponse> getAll(
-            @RequestParam long userId,
+            Authentication authentication,
             @RequestParam(required = false) String date,
             @RequestParam(required = false) MealType mealType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return logGroupService.getAll(userId, date, mealType, page, size);
+        return logGroupService.getAll(requireUserId(authentication), date, mealType, page, size);
     }
 
     @GetMapping("/{id}")
     public LogGroupResponse getById(
-            @RequestParam long userId,
+            Authentication authentication,
             @PathVariable long id
     ) {
-        return logGroupService.getById(userId, id);
+        return logGroupService.getById(requireUserId(authentication), id);
     }
 
     @PutMapping("/{id}")
     public LogGroupResponse update(
-            @RequestParam long userId,
+            Authentication authentication,
             @PathVariable long id,
             @Valid @RequestBody LogGroupRequest request
     ) {
-        return logGroupService.update(userId, id, request);
+        return logGroupService.update(requireUserId(authentication), id, request);
     }
 
     @DeleteMapping("/{id}")
     public void delete(
-            @RequestParam long userId,
+            Authentication authentication,
             @PathVariable long id
     ) {
-        logGroupService.delete(userId, id);
+        logGroupService.delete(requireUserId(authentication), id);
+    }
+
+    private long requireUserId(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof AuthenticatedUser user)) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+
+        return user.id();
     }
 }
