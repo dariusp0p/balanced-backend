@@ -1,8 +1,8 @@
 package com.example.balancedbackend.loggroup.service;
 
 import com.example.balancedbackend.audit.service.AuditService;
-import com.example.balancedbackend.common.exception.BadRequestException;
-import com.example.balancedbackend.common.exception.NotFoundException;
+import com.example.balancedbackend.shared.exception.BadRequestException;
+import com.example.balancedbackend.shared.exception.NotFoundException;
 import com.example.balancedbackend.foodlog.api.dto.PagedResponse;
 import com.example.balancedbackend.foodlog.model.FoodLog;
 import com.example.balancedbackend.foodlog.store.FoodLogRepository;

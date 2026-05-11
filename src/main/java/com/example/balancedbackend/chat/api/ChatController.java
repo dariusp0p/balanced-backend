@@ -3,7 +3,7 @@ package com.example.balancedbackend.chat.api;
 import com.example.balancedbackend.chat.api.dto.ChatMessageRequest;
 import com.example.balancedbackend.chat.api.dto.ChatMessageResponse;
 import com.example.balancedbackend.chat.service.ChatService;
-import com.example.balancedbackend.common.security.SecuritySupport;
+import com.example.balancedbackend.shared.security.SecuritySupport;
 import jakarta.validation.Valid;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;

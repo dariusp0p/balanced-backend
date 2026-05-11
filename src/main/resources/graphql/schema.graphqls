@@ -1,8 +1,4 @@
 type Query {
-  logGroups(date: String, mealType: MealType, page: Int = 0, size: Int = 10): LogGroupPage!
-  logGroup(id: ID!): LogGroup
-  foodLogs(page: Int = 0, size: Int = 10): FoodLogPage!
-  foodLogsByDate(date: String!): [FoodLog!]!
   dailyLog(date: String!): DailyLog!
 }
 
@@ -40,14 +36,6 @@ type LogGroup {
   totalFats: Float!
 }
 
-type LogGroupPage {
-  content: [LogGroup!]!
-  page: Int!
-  size: Int!
-  totalElements: Int!
-  totalPages: Int!
-}
-
 type FoodLog {
   id: ID!
   logGroupId: ID
@@ -58,12 +46,4 @@ type FoodLog {
   protein: Float!
   carbs: Float!
   fats: Float!
-}
-
-type FoodLogPage {
-  content: [FoodLog!]!
-  page: Int!
-  size: Int!
-  totalElements: Int!
-  totalPages: Int!
 }

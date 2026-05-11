@@ -1,69 +1,191 @@
 package com.example.balancedbackend.auth.service;
 
+import com.example.balancedbackend.audit.service.AuditService;
+import com.example.balancedbackend.auth.api.dto.DailyNutritionTargetRequest;
 import com.example.balancedbackend.auth.api.dto.LoginRequest;
 import com.example.balancedbackend.auth.api.dto.SignupRequest;
-import com.example.balancedbackend.common.exception.BadRequestException;
-import com.example.balancedbackend.common.exception.ConflictException;
-import com.example.balancedbackend.common.exception.UnauthorizedException;
+import com.example.balancedbackend.auth.model.AuthSession;
+import com.example.balancedbackend.auth.model.Role;
+import com.example.balancedbackend.auth.model.User;
+import com.example.balancedbackend.auth.store.InMemorySessionStore;
+import com.example.balancedbackend.auth.store.RoleRepository;
+import com.example.balancedbackend.auth.store.UserRepository;
+import com.example.balancedbackend.auth.store.UserRoleRepository;
+import com.example.balancedbackend.shared.exception.BadRequestException;
+import com.example.balancedbackend.shared.exception.ConflictException;
+import com.example.balancedbackend.shared.exception.UnauthorizedException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.transaction.annotation.Transactional;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@SpringBootTest(properties = {
-        "app.seed.enabled=false",
-        "spring.datasource.url=jdbc:h2:mem:balanced-auth-service;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
-})
-@Transactional
+@ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-    @Autowired
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private RoleRepository roleRepository;
+    @Mock
+    private UserRoleRepository userRoleRepository;
+    @Mock
+    private InMemorySessionStore sessionStore;
+    @Mock
+    private AuditService auditService;
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
     private AuthService authService;
 
-    @Test
-    void signupShouldCreateUser() {
-        var response = authService.signup(new SignupRequest("Darius", "darius@example.com", "password123", "password123"));
-
-        assertThat(response.message()).isEqualTo("User registered successfully");
-        assertThat(response.user().email()).isEqualTo("darius@example.com");
+    @BeforeEach
+    void setUp() {
+        authService = new AuthService(
+                userRepository,
+                roleRepository,
+                userRoleRepository,
+                sessionStore,
+                auditService,
+                passwordEncoder,
+                480
+        );
     }
 
     @Test
     void signupShouldFailWhenPasswordsDoNotMatch() {
-        assertThatThrownBy(() -> authService.signup(
-                new SignupRequest("Darius", "darius@example.com", "password123", "passwordABC"))
-        ).isInstanceOf(BadRequestException.class)
-                .hasMessage("Password and confirmPassword must match");
+        SignupRequest request = new SignupRequest("User", "user@example.com", "secret123", "different");
+
+        assertThatThrownBy(() -> authService.signup(request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("confirmPassword");
     }
 
     @Test
-    void signupShouldFailWhenEmailAlreadyExists() {
-        authService.signup(new SignupRequest("Darius", "darius@example.com", "password123", "password123"));
+    void signupShouldFailWhenEmailAlreadyExistsCaseInsensitive() {
+        SignupRequest request = new SignupRequest("User", "USER@example.com", "secret123", "secret123");
+        when(userRepository.existsByEmailIgnoreCase("user@example.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> authService.signup(
-                new SignupRequest("Darius 2", "darius@example.com", "password456", "password456"))
-        ).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> authService.signup(request))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("already exists");
     }
 
     @Test
-    void loginShouldReturnTokenForValidCredentials() {
-        authService.signup(new SignupRequest("Darius", "darius@example.com", "password123", "password123"));
+    void signupShouldCreateUserAssignRoleAndLogAction() {
+        SignupRequest request = new SignupRequest("Alice", "Alice@Example.com", "secret123", "secret123");
+        when(userRepository.existsByEmailIgnoreCase("alice@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("secret123")).thenReturn("encoded");
+        doAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            user.setId(42L);
+            return user;
+        }).when(userRepository).save(any(User.class));
+        Role userRole = new Role();
+        userRole.setId(7L);
+        userRole.setName("USER");
+        when(roleRepository.findByName("USER")).thenReturn(Optional.of(userRole));
+        when(roleRepository.findRoleNamesByUserId(42L)).thenReturn(List.of("USER"));
 
-        var response = authService.login(new LoginRequest("darius@example.com", "password123"));
+        var response = authService.signup(request);
 
-        assertThat(response.token()).isNotBlank();
+        assertThat(response.message()).isEqualTo("User registered successfully");
+        assertThat(response.user().id()).isEqualTo(42L);
+        assertThat(response.user().email()).isEqualTo("alice@example.com");
+        assertThat(response.user().roles()).containsExactly("USER");
+        assertThat(response.user().dailyNutritionTarget().calories()).isEqualTo(2000);
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertThat(userCaptor.getValue().getPasswordHash()).isEqualTo("encoded");
+        verify(userRoleRepository).save(any());
+        verify(auditService).logAction(42L, "Signed up with email alice@example.com");
+    }
+
+    @Test
+    void loginShouldReturnBearerTokenAndUserDetails() {
+        User user = new User("Test User", "test@example.com", "hashed");
+        user.setId(5L);
+        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("secret123", "hashed")).thenReturn(true);
+        Instant expiresAt = Instant.now().plusSeconds(3600);
+        when(sessionStore.createSession(eq(5L), any(Instant.class)))
+                .thenReturn(new AuthSession("token-123", 5L, expiresAt));
+        when(roleRepository.findRoleNamesByUserId(5L)).thenReturn(List.of("USER"));
+
+        var response = authService.login(new LoginRequest("Test@Example.com", "secret123"));
+
+        assertThat(response.token()).isEqualTo("token-123");
         assertThat(response.tokenType()).isEqualTo("Bearer");
+        assertThat(response.user().id()).isEqualTo(5L);
+        assertThat(response.user().email()).isEqualTo("test@example.com");
+        verify(auditService).logAction(5L, "Logged in");
     }
 
     @Test
-    void loginShouldFailForInvalidCredentials() {
-        authService.signup(new SignupRequest("Darius", "darius@example.com", "password123", "password123"));
+    void loginShouldFailForUnknownUser() {
+        when(userRepository.findByEmailIgnoreCase("missing@example.com")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> authService.login(new LoginRequest("darius@example.com", "wrongpass")))
+        assertThatThrownBy(() -> authService.login(new LoginRequest("missing@example.com", "secret123")))
                 .isInstanceOf(UnauthorizedException.class)
-                .hasMessage("Invalid email or password");
+                .hasMessageContaining("Invalid email or password");
+    }
+
+    @Test
+    void loginShouldFailForWrongPassword() {
+        User user = new User("User", "user@example.com", "hashed");
+        user.setId(6L);
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong", "hashed")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("user@example.com", "wrong")))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessageContaining("Invalid email or password");
+
+        verify(sessionStore, never()).createSession(any(Long.class), any(Instant.class));
+    }
+
+    @Test
+    void updateDailyNutritionTargetShouldPersistAndLog() {
+        User user = new User("User", "user@example.com", "hashed");
+        user.setId(11L);
+        when(userRepository.findById(11L)).thenReturn(Optional.of(user));
+        DailyNutritionTargetRequest request = new DailyNutritionTargetRequest(2200, 170, 240, 75);
+
+        var response = authService.updateDailyNutritionTarget(11L, request);
+
+        assertThat(response.calories()).isEqualTo(2200);
+        assertThat(response.protein()).isEqualTo(170);
+        assertThat(response.carbs()).isEqualTo(240);
+        assertThat(response.fats()).isEqualTo(75);
+        verify(userRepository).save(user);
+        verify(auditService).logAction(
+                11L,
+                "Updated daily nutrition target to calories=2200.0, protein=170.0, carbs=240.0, fats=75.0"
+        );
+    }
+
+    @Test
+    void updateDailyNutritionTargetShouldFailForMissingUser() {
+        when(userRepository.findById(88L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.updateDailyNutritionTarget(
+                88L,
+                new DailyNutritionTargetRequest(2000, 150, 250, 70)
+        )).isInstanceOf(UnauthorizedException.class);
     }
 }

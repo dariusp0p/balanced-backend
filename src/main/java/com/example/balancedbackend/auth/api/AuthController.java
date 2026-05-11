@@ -10,7 +10,7 @@ import com.example.balancedbackend.auth.api.dto.UserResponse;
 import com.example.balancedbackend.auth.model.User;
 import com.example.balancedbackend.auth.store.RoleRepository;
 import com.example.balancedbackend.auth.service.AuthService;
-import com.example.balancedbackend.common.security.SecuritySupport;
+import com.example.balancedbackend.shared.security.SecuritySupport;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

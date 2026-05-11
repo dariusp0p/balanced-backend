@@ -6,8 +6,8 @@ import com.example.balancedbackend.chat.api.dto.ChatMessageRequest;
 import com.example.balancedbackend.chat.api.dto.ChatMessageResponse;
 import com.example.balancedbackend.chat.model.ChatMessage;
 import com.example.balancedbackend.chat.store.ChatMessageRepository;
-import com.example.balancedbackend.common.exception.BadRequestException;
-import com.example.balancedbackend.common.exception.NotFoundException;
+import com.example.balancedbackend.shared.exception.BadRequestException;
+import com.example.balancedbackend.shared.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;

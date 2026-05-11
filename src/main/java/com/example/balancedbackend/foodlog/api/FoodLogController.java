@@ -1,6 +1,6 @@
 package com.example.balancedbackend.foodlog.api;
 
-import com.example.balancedbackend.common.exception.UnauthorizedException;
+import com.example.balancedbackend.shared.exception.UnauthorizedException;
 import com.example.balancedbackend.foodlog.api.dto.FoodLogRequest;
 import com.example.balancedbackend.foodlog.api.dto.FoodLogResponse;
 import com.example.balancedbackend.foodlog.api.dto.FoodLogStatsResponse;
@@ -9,7 +9,7 @@ import com.example.balancedbackend.foodlog.api.dto.GenerationStartRequest;
 import com.example.balancedbackend.foodlog.api.dto.PagedResponse;
 import com.example.balancedbackend.foodlog.service.FoodLogGeneratorService;
 import com.example.balancedbackend.foodlog.service.FoodLogService;
-import com.example.balancedbackend.security.AuthenticatedUser;
+import com.example.balancedbackend.shared.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;

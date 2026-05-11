@@ -5,7 +5,7 @@ import com.example.balancedbackend.auth.model.User;
 import com.example.balancedbackend.auth.store.RoleRepository;
 import com.example.balancedbackend.auth.store.UserRepository;
 import com.example.balancedbackend.auth.service.AuthService;
-import com.example.balancedbackend.common.security.SecuritySupport;
+import com.example.balancedbackend.shared.security.SecuritySupport;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

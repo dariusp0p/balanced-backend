@@ -1,11 +1,11 @@
 package com.example.balancedbackend.food.api;
 
-import com.example.balancedbackend.common.exception.UnauthorizedException;
+import com.example.balancedbackend.shared.exception.UnauthorizedException;
 import com.example.balancedbackend.food.api.dto.FoodRequest;
 import com.example.balancedbackend.food.api.dto.FoodResponse;
 import com.example.balancedbackend.food.service.FoodService;
 import com.example.balancedbackend.foodlog.api.dto.PagedResponse;
-import com.example.balancedbackend.security.AuthenticatedUser;
+import com.example.balancedbackend.shared.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;

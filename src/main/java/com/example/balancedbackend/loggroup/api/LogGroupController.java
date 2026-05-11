@@ -1,12 +1,12 @@
 package com.example.balancedbackend.loggroup.api;
 
-import com.example.balancedbackend.common.exception.UnauthorizedException;
+import com.example.balancedbackend.shared.exception.UnauthorizedException;
 import com.example.balancedbackend.foodlog.api.dto.PagedResponse;
 import com.example.balancedbackend.loggroup.api.dto.LogGroupRequest;
 import com.example.balancedbackend.loggroup.api.dto.LogGroupResponse;
 import com.example.balancedbackend.loggroup.model.MealType;
 import com.example.balancedbackend.loggroup.service.LogGroupService;
-import com.example.balancedbackend.security.AuthenticatedUser;
+import com.example.balancedbackend.shared.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;

@@ -134,3 +134,13 @@ Recommended approach for CRUD offline support:
 4. On reconnect, replay queued mutations in order to backend.
 5. After successful replay, fetch latest server state (or handle WebSocket events) to resolve drift.
 6. Use a `clientMutationId` per queued operation to avoid duplicate replays.
+
+
+
+
+
+## Testing
+```bash
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+mvn clean test jacoco:report
+```

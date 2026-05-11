@@ -1,7 +1,7 @@
 package com.example.balancedbackend.foodlog.service;
 
-import com.example.balancedbackend.common.exception.BadRequestException;
-import com.example.balancedbackend.common.exception.ConflictException;
+import com.example.balancedbackend.shared.exception.BadRequestException;
+import com.example.balancedbackend.shared.exception.ConflictException;
 import com.example.balancedbackend.foodlog.api.dto.FoodLogResponse;
 import com.example.balancedbackend.foodlog.model.FoodLog;
 import com.example.balancedbackend.foodlog.api.dto.FoodLogBatchEvent;

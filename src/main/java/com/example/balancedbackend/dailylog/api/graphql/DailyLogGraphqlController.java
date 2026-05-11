@@ -1,7 +1,7 @@
 package com.example.balancedbackend.dailylog.api.graphql;
 
 import com.example.balancedbackend.auth.model.User;
-import com.example.balancedbackend.common.security.SecuritySupport;
+import com.example.balancedbackend.shared.security.SecuritySupport;
 import com.example.balancedbackend.dailylog.api.graphql.dto.DailyLogResponse;
 import com.example.balancedbackend.dailylog.api.graphql.dto.DailyNutritionTargetGraphqlResponse;
 import com.example.balancedbackend.foodlog.api.dto.FoodLogResponse;
