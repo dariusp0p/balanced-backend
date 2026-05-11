@@ -1,7 +1,7 @@
 package com.example.balancedbackend.foodlog.api.dto;
 
 public record FoodLogStatsResponse(
-        long totalEntries,
+        int totalLogs,
         double totalCalories,
         double totalProtein,
         double totalCarbs,
@@ -9,4 +9,3 @@ public record FoodLogStatsResponse(
         MacroDistributionResponse macroDistribution
 ) {
 }
-

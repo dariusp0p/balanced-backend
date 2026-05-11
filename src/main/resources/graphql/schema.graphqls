@@ -1,27 +1,39 @@
 type Query {
-  logGroups(page: Int = 0, size: Int = 10): LogGroupPage!
-  logGroup(id: ID!): LogGroup
-  foodLogs(page: Int = 0, size: Int = 10): FoodLogPage!
-  foodLogsByDate(date: String!): [FoodLog!]!
+  dailyLog(date: String!): DailyLog!
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+  CUSTOM
+}
+
+type DailyLog {
+  date: String!
+  logGroups: [LogGroup!]!
+  foodLogs: [FoodLog!]!
+  dailyNutritionTarget: DailyNutritionTarget!
+}
+
+type DailyNutritionTarget {
+  calories: Float!
+  protein: Float!
+  carbs: Float!
+  fats: Float!
 }
 
 type LogGroup {
   id: ID!
   name: String!
+  mealType: MealType!
   date: String!
   computeFromFoodLogs: Boolean!
   totalCalories: Float!
   totalProtein: Float!
   totalCarbs: Float!
   totalFats: Float!
-}
-
-type LogGroupPage {
-  content: [LogGroup!]!
-  page: Int!
-  size: Int!
-  totalElements: Int!
-  totalPages: Int!
 }
 
 type FoodLog {
@@ -35,12 +47,3 @@ type FoodLog {
   carbs: Float!
   fats: Float!
 }
-
-type FoodLogPage {
-  content: [FoodLog!]!
-  page: Int!
-  size: Int!
-  totalElements: Int!
-  totalPages: Int!
-}
-

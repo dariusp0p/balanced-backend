@@ -1,48 +1,40 @@
 package com.example.balancedbackend.foodlog.api.dto;
 
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 
 public record FoodLogRequest(
+        Long logGroupId,
+
+        Long foodId,
+
         @NotBlank(message = "Name is required")
         String name,
 
         @NotBlank(message = "Date is required")
-        @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "Date must be in YYYY-MM-DD format")
         String date,
 
         @NotBlank(message = "Time is required")
-        @Pattern(regexp = "^([01]\\d|2[0-3]):[0-5]\\d$", message = "Time must be in HH:MM 24h format")
         String time,
 
-        @Min(value = 1, message = "logGroupId must be >= 1")
-        Long logGroupId,
+        @Positive(message = "Quantity must be greater than zero")
+        Double quantity,
 
-        @DecimalMin(value = "0", message = "Calories must be >= 0")
+        String unit,
+
+        @PositiveOrZero(message = "Calories must be positive or zero")
         double calories,
 
-        @DecimalMin(value = "0", message = "Protein must be >= 0")
+        @PositiveOrZero(message = "Protein must be positive or zero")
         double protein,
 
-        @DecimalMin(value = "0", message = "Carbs must be >= 0")
+        @PositiveOrZero(message = "Carbs must be positive or zero")
         double carbs,
 
-        @DecimalMin(value = "0", message = "Fats must be >= 0")
-        double fats
+        @PositiveOrZero(message = "Fats must be positive or zero")
+        double fats,
+
+        String notes
 ) {
-
-    public FoodLogRequest(
-            String name,
-            String date,
-            String time,
-            double calories,
-            double protein,
-            double carbs,
-            double fats
-    ) {
-        this(name, date, time, null, calories, protein, carbs, fats);
-    }
 }
-

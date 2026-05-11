@@ -1,13 +1,22 @@
 # balanced-backend
 
-Spring Boot in-memory backend for food logging.
+Spring Boot backend for food logging with PostgreSQL persistence.
 
 ## Requirements
 
 - Java 21+
 - Maven 3.9+
+- Docker (for local PostgreSQL)
 
 ## Run locally
+
+Start PostgreSQL first:
+
+```bash
+docker compose up -d postgres
+```
+
+Then run the application:
 
 ```bash
 mvn spring-boot:run
@@ -18,6 +27,8 @@ mvn spring-boot:run
 ```bash
 mvn test
 ```
+
+Tests use an in-memory H2 database, while the application uses PostgreSQL by default.
 
 ## Seeded demo user
 
@@ -123,3 +134,13 @@ Recommended approach for CRUD offline support:
 4. On reconnect, replay queued mutations in order to backend.
 5. After successful replay, fetch latest server state (or handle WebSocket events) to resolve drift.
 6. Use a `clientMutationId` per queued operation to avoid duplicate replays.
+
+
+
+
+
+## Testing
+```bash
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+mvn clean test jacoco:report
+```

@@ -1,112 +1,186 @@
 package com.example.balancedbackend.loggroup.service;
 
-import com.example.balancedbackend.common.exception.BadRequestException;
-import com.example.balancedbackend.common.exception.NotFoundException;
+import com.example.balancedbackend.audit.service.AuditService;
+import com.example.balancedbackend.shared.exception.BadRequestException;
+import com.example.balancedbackend.shared.exception.NotFoundException;
+import com.example.balancedbackend.foodlog.api.dto.PagedResponse;
 import com.example.balancedbackend.foodlog.model.FoodLog;
-import com.example.balancedbackend.foodlog.store.InMemoryFoodLogStore;
+import com.example.balancedbackend.foodlog.store.FoodLogRepository;
 import com.example.balancedbackend.loggroup.api.dto.LogGroupRequest;
 import com.example.balancedbackend.loggroup.api.dto.LogGroupResponse;
-import com.example.balancedbackend.loggroup.api.dto.PagedResponse;
 import com.example.balancedbackend.loggroup.model.LogGroup;
-import com.example.balancedbackend.loggroup.store.InMemoryLogGroupStore;
+import com.example.balancedbackend.loggroup.model.MealType;
+import com.example.balancedbackend.loggroup.store.LogGroupRepository;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
-import java.util.Comparator;
 import java.util.List;
 
 @Service
 public class LogGroupService {
 
-    private final InMemoryLogGroupStore logGroupStore;
-    private final InMemoryFoodLogStore foodLogStore;
+    private final LogGroupRepository logGroupRepository;
+    private final FoodLogRepository foodLogRepository;
+    private final AuditService auditService;
 
-    public LogGroupService(InMemoryLogGroupStore logGroupStore, InMemoryFoodLogStore foodLogStore) {
-        this.logGroupStore = logGroupStore;
-        this.foodLogStore = foodLogStore;
+    public LogGroupService(
+            LogGroupRepository logGroupRepository,
+            FoodLogRepository foodLogRepository,
+            AuditService auditService
+    ) {
+        this.logGroupRepository = logGroupRepository;
+        this.foodLogRepository = foodLogRepository;
+        this.auditService = auditService;
     }
 
     public LogGroupResponse create(long userId, LogGroupRequest request) {
-        LogGroup draft = new LogGroup(
-                0,
-                userId,
-                request.name().trim(),
-                parseDate(request.date()),
-                request.computeFromFoodLogs(),
-                request.totalCalories(),
-                request.totalProtein(),
-                request.totalCarbs(),
-                request.totalFats()
-        );
+        validateRequest(request);
 
-        return toResponse(logGroupStore.create(draft));
+        LogGroup group = LogGroup.builder()
+                .userId(userId)
+                .name(request.name().trim())
+                .mealType(request.mealType() == null ? MealType.CUSTOM : request.mealType())
+                .date(parseDate(request.date()))
+                .computeFromFoodLogs(request.computeFromFoodLogs())
+                .totalCalories(request.totalCalories())
+                .totalProtein(request.totalProtein())
+                .totalCarbs(request.totalCarbs())
+                .totalFats(request.totalFats())
+                .build();
+
+        LogGroup saved = logGroupRepository.save(group);
+        auditService.logAction(userId, "Created log group " + saved.getId() + " (" + saved.getName() + ")");
+        return toResponse(saved);
     }
 
-    public PagedResponse<LogGroupResponse> getAll(long userId, int page, int size) {
-        List<LogGroupResponse> sorted = logGroupStore.findAllByUserId(userId).stream()
-                .sorted(Comparator.comparing(LogGroup::date).reversed().thenComparing(LogGroup::id).reversed())
+    public PagedResponse<LogGroupResponse> getAll(
+            long userId,
+            String date,
+            MealType mealType,
+            int page,
+            int size
+    ) {
+        PageRequest pageRequest = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Order.desc("date"), Sort.Order.desc("id"))
+        );
+
+        Page<LogGroup> result;
+
+        if (date != null && !date.isBlank()) {
+            result = logGroupRepository.findAllByUserIdAndDate(userId, parseDate(date), pageRequest);
+        } else if (mealType != null) {
+            result = logGroupRepository.findAllByUserIdAndMealType(userId, mealType, pageRequest);
+        } else {
+            result = logGroupRepository.findAllByUserId(userId, pageRequest);
+        }
+
+        List<LogGroupResponse> content = result.getContent().stream()
                 .map(this::toResponse)
                 .toList();
 
-        int fromIndex = Math.min(page * size, sorted.size());
-        int toIndex = Math.min(fromIndex + size, sorted.size());
-
-        List<LogGroupResponse> pageContent = sorted.subList(fromIndex, toIndex);
-        int totalPages = size == 0 ? 0 : (int) Math.ceil((double) sorted.size() / size);
-
-        return new PagedResponse<>(pageContent, page, size, sorted.size(), totalPages);
+        return new PagedResponse<>(
+                content,
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements(),
+                result.getTotalPages()
+        );
     }
 
     public LogGroupResponse getById(long userId, long id) {
-        return toResponse(getOwnedGroup(userId, id));
+        LogGroup group = getOwnedGroup(userId, id);
+        return toResponse(group);
+    }
+
+    @Transactional
+    public List<LogGroupResponse> ensureDefaultGroupsForEmptyDay(long userId, String date) {
+        LocalDate selectedDate = parseDate(date);
+        boolean hasGroups = logGroupRepository.existsByUserIdAndDate(userId, selectedDate);
+        boolean hasLogs = foodLogRepository.existsByUserIdAndDate(userId, selectedDate);
+
+        if (!hasGroups && !hasLogs) {
+            logGroupRepository.saveAll(List.of(
+                    createDefaultGroup(userId, selectedDate, "Breakfast", MealType.BREAKFAST),
+                    createDefaultGroup(userId, selectedDate, "Lunch", MealType.LUNCH),
+                    createDefaultGroup(userId, selectedDate, "Dinner", MealType.DINNER),
+                    createDefaultGroup(userId, selectedDate, "Snacks", MealType.SNACK)
+            ));
+        }
+
+        return logGroupRepository.findAllByUserIdAndDateOrderByIdAsc(userId, selectedDate)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     public LogGroupResponse update(long userId, long id, LogGroupRequest request) {
-        LogGroup existing = getOwnedGroup(userId, id);
+        validateRequest(request);
 
-        LogGroup updated = new LogGroup(
-                existing.id(),
-                existing.userId(),
-                request.name().trim(),
-                parseDate(request.date()),
-                request.computeFromFoodLogs(),
-                request.totalCalories(),
-                request.totalProtein(),
-                request.totalCarbs(),
-                request.totalFats()
-        );
+        LogGroup group = getOwnedGroup(userId, id);
 
-        return toResponse(logGroupStore.save(updated));
+        group.setName(request.name().trim());
+        group.setMealType(request.mealType() == null ? MealType.CUSTOM : request.mealType());
+        group.setDate(parseDate(request.date()));
+        group.setComputeFromFoodLogs(request.computeFromFoodLogs());
+        group.setTotalCalories(request.totalCalories());
+        group.setTotalProtein(request.totalProtein());
+        group.setTotalCarbs(request.totalCarbs());
+        group.setTotalFats(request.totalFats());
+
+        LogGroup saved = logGroupRepository.save(group);
+        auditService.logAction(userId, "Updated log group " + saved.getId() + " (" + saved.getName() + ")");
+        return toResponse(saved);
     }
 
+    @Transactional
     public void delete(long userId, long id) {
-        LogGroup existing = getOwnedGroup(userId, id);
-        foodLogStore.deleteAllByUserIdAndLogGroupId(userId, existing.id());
-        logGroupStore.delete(existing.id());
+        LogGroup group = getOwnedGroup(userId, id);
+
+        foodLogRepository.deleteAllByUserIdAndGroupId(userId, group.getId());
+        logGroupRepository.delete(group);
+        auditService.logAction(userId, "Deleted log group " + id + " (" + group.getName() + ")");
     }
 
     private LogGroup getOwnedGroup(long userId, long id) {
-        LogGroup group = logGroupStore.findById(id)
+        return logGroupRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new NotFoundException("Log group not found"));
+    }
 
-        if (group.userId() != userId) {
-            throw new NotFoundException("Log group not found");
-        }
-
-        return group;
+    private LogGroup createDefaultGroup(long userId, LocalDate date, String name, MealType mealType) {
+        return LogGroup.builder()
+                .userId(userId)
+                .name(name)
+                .mealType(mealType)
+                .date(date)
+                .computeFromFoodLogs(true)
+                .totalCalories(0)
+                .totalProtein(0)
+                .totalCarbs(0)
+                .totalFats(0)
+                .build();
     }
 
     private LogGroupResponse toResponse(LogGroup group) {
-        Totals totals = group.computeFromFoodLogs()
-                ? computeTotalsFromLogs(group.userId(), group.id())
-                : new Totals(group.totalCalories(), group.totalProtein(), group.totalCarbs(), group.totalFats());
+        Totals totals = group.isComputeFromFoodLogs()
+                ? computeTotalsFromLogs(group.getUserId(), group.getId())
+                : new Totals(
+                group.getTotalCalories(),
+                group.getTotalProtein(),
+                group.getTotalCarbs(),
+                group.getTotalFats()
+        );
 
         return new LogGroupResponse(
-                group.id(),
-                group.name(),
-                group.date().toString(),
-                group.computeFromFoodLogs(),
+                group.getId(),
+                group.getName(),
+                group.getMealType(),
+                group.getDate().toString(),
+                group.isComputeFromFoodLogs(),
                 round2(totals.calories()),
                 round2(totals.protein()),
                 round2(totals.carbs()),
@@ -115,16 +189,31 @@ public class LogGroupService {
     }
 
     private Totals computeTotalsFromLogs(long userId, long groupId) {
-        List<FoodLog> logs = foodLogStore.findAllByUserId(userId).stream()
-                .filter(log -> Long.valueOf(groupId).equals(log.logGroupId()))
-                .toList();
+        List<FoodLog> logs = foodLogRepository.findAllByUserIdAndGroupId(userId, groupId);
 
         return new Totals(
-                logs.stream().mapToDouble(FoodLog::calories).sum(),
-                logs.stream().mapToDouble(FoodLog::protein).sum(),
-                logs.stream().mapToDouble(FoodLog::carbs).sum(),
-                logs.stream().mapToDouble(FoodLog::fats).sum()
+                logs.stream().mapToDouble(FoodLog::getCalories).sum(),
+                logs.stream().mapToDouble(FoodLog::getProtein).sum(),
+                logs.stream().mapToDouble(FoodLog::getCarbs).sum(),
+                logs.stream().mapToDouble(FoodLog::getFats).sum()
         );
+    }
+
+    private void validateRequest(LogGroupRequest request) {
+        if (request.name() == null || request.name().isBlank()) {
+            throw new BadRequestException("Group name is required");
+        }
+
+        if (request.date() == null || request.date().isBlank()) {
+            throw new BadRequestException("Date is required");
+        }
+
+        if (request.totalCalories() < 0 ||
+                request.totalProtein() < 0 ||
+                request.totalCarbs() < 0 ||
+                request.totalFats() < 0) {
+            throw new BadRequestException("Nutrition values cannot be negative");
+        }
     }
 
     private LocalDate parseDate(String date) {
@@ -139,7 +228,11 @@ public class LogGroupService {
         return Math.round(value * 100.0) / 100.0;
     }
 
-    private record Totals(double calories, double protein, double carbs, double fats) {
+    private record Totals(
+            double calories,
+            double protein,
+            double carbs,
+            double fats
+    ) {
     }
 }
-

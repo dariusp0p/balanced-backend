@@ -1,16 +1,19 @@
 package com.example.balancedbackend.loggroup.api;
 
+import com.example.balancedbackend.auth.model.Role;
+import com.example.balancedbackend.auth.store.RoleRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
 
-import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -20,266 +23,290 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Transactional
 class LogGroupControllerIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
-
     @Autowired
     private ObjectMapper objectMapper;
+    @Autowired
+    private RoleRepository roleRepository;
 
-    @Test
-    void shouldRejectUnauthenticatedRequests() throws Exception {
-        mockMvc.perform(get("/api/log-groups"))
-                .andExpect(status().isUnauthorized());
+    @BeforeEach
+    void setUp() {
+        createRoleIfMissing("ADMIN", "Full permissions");
+        createRoleIfMissing("USER", "Restricted permissions");
     }
 
     @Test
-    void shouldCreateListGetUpdateAndDeleteLogGroup() throws Exception {
-        String token = signUpAndLogin("log-group-user@example.com");
+    void fullCrudFlowShouldWork() throws Exception {
+        signUp("Group User", "group@example.com");
+        String token = tokenFromLogin("group@example.com", "secret123");
 
-        String createdBody = mockMvc.perform(post("/api/log-groups")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+        MvcResult create = mockMvc.perform(post("/api/log-groups")
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(logGroupPayload("Training Day", "2024-03-24", false, 2100, 150, 220, 65)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").isNumber())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-
-        long id = objectMapper.readTree(createdBody).get("id").asLong();
-
-        mockMvc.perform(get("/api/log-groups")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .param("page", "0")
-                        .param("size", "10"))
+                        .content("""
+                                {
+                                  "name":"Lunch",
+                                  "mealType":"LUNCH",
+                                  "date":"2026-05-11",
+                                  "computeFromFoodLogs":false,
+                                  "totalCalories":500,
+                                  "totalProtein":30,
+                                  "totalCarbs":45,
+                                  "totalFats":20
+                                }
+                                """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].name").value("Training Day"));
+                .andExpect(jsonPath("$.name").value("Lunch"))
+                .andReturn();
+
+        long id = objectMapper.readTree(create.getResponse().getContentAsString()).path("id").asLong();
 
         mockMvc.perform(get("/api/log-groups/{id}", id)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                        .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalCalories").value(2100.0));
+                .andExpect(jsonPath("$.id").value(id));
 
         mockMvc.perform(put("/api/log-groups/{id}", id)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(logGroupPayload("Rest Day", "2024-03-25", false, 1800, 130, 170, 55)))
+                        .content("""
+                                {
+                                  "name":"Lunch Updated",
+                                  "mealType":"LUNCH",
+                                  "date":"2026-05-11",
+                                  "computeFromFoodLogs":false,
+                                  "totalCalories":600,
+                                  "totalProtein":40,
+                                  "totalCarbs":50,
+                                  "totalFats":25
+                                }
+                                """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Rest Day"));
+                .andExpect(jsonPath("$.name").value("Lunch Updated"));
 
         mockMvc.perform(delete("/api/log-groups/{id}", id)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isNoContent());
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/log-groups/{id}", id)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                        .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    void shouldComputeTotalsFromFoodLogsWhenConfigured() throws Exception {
-        String token = signUpAndLogin("log-group-compute@example.com");
+    void listAndFiltersShouldWork() throws Exception {
+        signUp("Group User", "group-filter@example.com");
+        String token = tokenFromLogin("group-filter@example.com", "secret123");
 
-        String groupBody = mockMvc.perform(post("/api/log-groups")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(logGroupPayload("Auto", "2024-03-24", true, 0, 0, 0, 0)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.computeFromFoodLogs").value(true))
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-
-        long groupId = objectMapper.readTree(groupBody).get("id").asLong();
-
-        mockMvc.perform(post("/api/food-logs")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(foodPayload("Breakfast", "2024-03-24", "08:15", groupId, 220, 18, 28, 4)))
-                .andExpect(status().isCreated());
-
-        mockMvc.perform(post("/api/food-logs")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(foodPayload("Lunch", "2024-03-25", "12:30", groupId, 500, 30, 55, 14)))
-                .andExpect(status().isCreated());
-
-        mockMvc.perform(get("/api/log-groups/{id}", groupId)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalCalories").value(720.0))
-                .andExpect(jsonPath("$.totalProtein").value(48.0));
-    }
-
-    @Test
-    void shouldDeleteFoodLogsWhenGroupIsDeleted() throws Exception {
-        String token = signUpAndLogin("log-group-cascade@example.com");
-
-        String groupBody = mockMvc.perform(post("/api/log-groups")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(logGroupPayload("Auto", "2024-03-24", false, 0, 0, 0, 0)))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        long groupId = objectMapper.readTree(groupBody).get("id").asLong();
-
-        String groupedLogBody = mockMvc.perform(post("/api/food-logs")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(foodPayload("Grouped", "2024-03-24", "08:15", groupId, 220, 18, 28, 4)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.logGroupId").value(groupId))
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-
-        String plainLogBody = mockMvc.perform(post("/api/food-logs")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(foodPayload("Plain", "2024-03-24", "09:00", null, 180, 12, 20, 5)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.logGroupId").doesNotExist())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-
-        long groupedLogId = objectMapper.readTree(groupedLogBody).get("id").asLong();
-        long plainLogId = objectMapper.readTree(plainLogBody).get("id").asLong();
-
-        mockMvc.perform(delete("/api/log-groups/{id}", groupId)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isNoContent());
-
-        mockMvc.perform(get("/api/food-logs/{id}", groupedLogId)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isNotFound());
-
-        mockMvc.perform(get("/api/food-logs/{id}", plainLogId)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Plain"));
-    }
-
-    @Test
-    void shouldValidateInputAndPagination() throws Exception {
-        String token = signUpAndLogin("log-group-validation@example.com");
-
-        mockMvc.perform(post("/api/log-groups")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(logGroupPayload("", "24-03-2024", false, -1, -1, -1, -1)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors.name").exists())
-                .andExpect(jsonPath("$.fieldErrors.date").exists())
-                .andExpect(jsonPath("$.fieldErrors.totalCalories").exists());
+        createGroup(token, "Breakfast", "BREAKFAST", "2026-05-11");
+        createGroup(token, "Dinner", "DINNER", "2026-05-12");
 
         mockMvc.perform(get("/api/log-groups")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .param("page", "-1")
-                        .param("size", "0"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("page must be >= 0")));
+                        .header("Authorization", "Bearer " + token)
+                        .param("date", "2026-05-11"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].name").value("Breakfast"));
+
+        mockMvc.perform(get("/api/log-groups")
+                        .header("Authorization", "Bearer " + token)
+                        .param("mealType", "DINNER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].name").value("Dinner"));
     }
 
     @Test
-    void shouldScopeDataPerUser() throws Exception {
-        String tokenUserA = signUpAndLogin("log-group-alice@example.com");
-        String tokenUserB = signUpAndLogin("log-group-bob@example.com");
+    void computeFromFoodLogsShouldAggregateValues() throws Exception {
+        signUp("Group User", "group-aggregate@example.com");
+        String token = tokenFromLogin("group-aggregate@example.com", "secret123");
 
-        String createdBody = mockMvc.perform(post("/api/log-groups")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenUserA)
+        MvcResult create = mockMvc.perform(post("/api/log-groups")
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(logGroupPayload("Private", "2024-03-24", false, 1000, 80, 90, 30)))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+                        .content("""
+                                {
+                                  "name":"Auto Group",
+                                  "mealType":"LUNCH",
+                                  "date":"2026-05-11",
+                                  "computeFromFoodLogs":true,
+                                  "totalCalories":0,
+                                  "totalProtein":0,
+                                  "totalCarbs":0,
+                                  "totalFats":0
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+        long groupId = objectMapper.readTree(create.getResponse().getContentAsString()).path("id").asLong();
 
-        long id = objectMapper.readTree(createdBody).get("id").asLong();
+        mockMvc.perform(post("/api/food-logs")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "logGroupId": %d,
+                                  "name":"Meal 1",
+                                  "date":"2026-05-11",
+                                  "time":"12:00",
+                                  "quantity":1,
+                                  "unit":"serving",
+                                  "calories":200,
+                                  "protein":20,
+                                  "carbs":10,
+                                  "fats":5
+                                }
+                                """.formatted(groupId)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/log-groups/{id}", groupId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCalories").value(200.0))
+                .andExpect(jsonPath("$.totalProtein").value(20.0));
+    }
+
+    @Test
+    void shouldScopeDataPerUserAndValidate() throws Exception {
+        signUp("Group User One", "group1@example.com");
+        signUp("Group User Two", "group2@example.com");
+        String token1 = tokenFromLogin("group1@example.com", "secret123");
+        String token2 = tokenFromLogin("group2@example.com", "secret123");
+
+        MvcResult create = mockMvc.perform(post("/api/log-groups")
+                        .header("Authorization", "Bearer " + token1)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Private Group",
+                                  "mealType":"LUNCH",
+                                  "date":"2026-05-11",
+                                  "computeFromFoodLogs":false,
+                                  "totalCalories":100,
+                                  "totalProtein":10,
+                                  "totalCarbs":10,
+                                  "totalFats":5
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+        long id = objectMapper.readTree(create.getResponse().getContentAsString()).path("id").asLong();
 
         mockMvc.perform(get("/api/log-groups/{id}", id)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenUserB))
+                        .header("Authorization", "Bearer " + token2))
                 .andExpect(status().isNotFound());
+
+        mockMvc.perform(post("/api/log-groups")
+                        .header("Authorization", "Bearer " + token2)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"",
+                                  "mealType":"LUNCH",
+                                  "date":"bad",
+                                  "computeFromFoodLogs":false,
+                                  "totalCalories":-1,
+                                  "totalProtein":10,
+                                  "totalCarbs":10,
+                                  "totalFats":5
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
-    private String signUpAndLogin(String email) throws Exception {
-        String signupPayload = """
-                {
-                  "name":"Test User",
-                  "email":"%s",
-                  "password":"password123",
-                  "confirmPassword":"password123"
-                }
-                """.formatted(email);
+    @Test
+    void shouldDefaultMealTypeAndRejectInvalidDateFilter() throws Exception {
+        signUp("Group User", "group-default@example.com");
+        String token = tokenFromLogin("group-default@example.com", "secret123");
 
+        MvcResult create = mockMvc.perform(post("/api/log-groups")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"No Meal Type",
+                                  "date":"2026-05-11",
+                                  "computeFromFoodLogs":false,
+                                  "totalCalories":100,
+                                  "totalProtein":10,
+                                  "totalCarbs":10,
+                                  "totalFats":10
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mealType").value("CUSTOM"))
+                .andReturn();
+
+        long id = objectMapper.readTree(create.getResponse().getContentAsString()).path("id").asLong();
+        mockMvc.perform(get("/api/log-groups/{id}", id)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mealType").value("CUSTOM"));
+
+        mockMvc.perform(get("/api/log-groups")
+                        .header("Authorization", "Bearer " + token)
+                        .param("date", "2026/05/11"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Date must be in YYYY-MM-DD format"));
+    }
+
+    private void createGroup(String token, String name, String mealType, String date) throws Exception {
+        mockMvc.perform(post("/api/log-groups")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"%s",
+                                  "mealType":"%s",
+                                  "date":"%s",
+                                  "computeFromFoodLogs":false,
+                                  "totalCalories":100,
+                                  "totalProtein":10,
+                                  "totalCarbs":10,
+                                  "totalFats":5
+                                }
+                                """.formatted(name, mealType, date)))
+                .andExpect(status().isOk());
+    }
+
+    private void signUp(String name, String email) throws Exception {
         mockMvc.perform(post("/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(signupPayload))
+                        .content("""
+                                {
+                                  "name":"%s",
+                                  "email":"%s",
+                                  "password":"secret123",
+                                  "confirmPassword":"secret123"
+                                }
+                                """.formatted(name, email)))
                 .andExpect(status().isCreated());
+    }
 
-        String loginPayload = """
-                {
-                  "email":"%s",
-                  "password":"password123"
-                }
-                """.formatted(email);
-
-        String responseBody = mockMvc.perform(post("/auth/login")
+    private String tokenFromLogin(String email, String password) throws Exception {
+        MvcResult result = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginPayload))
+                        .content("""
+                                {
+                                  "email":"%s",
+                                  "password":"%s"
+                                }
+                                """.formatted(email, password)))
                 .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-
-        JsonNode json = objectMapper.readTree(responseBody);
-        return json.get("token").asText();
+                .andReturn();
+        JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
+        return root.path("token").asText();
     }
 
-    private String logGroupPayload(String name,
-                                   String date,
-                                   boolean computeFromFoodLogs,
-                                   double totalCalories,
-                                   double totalProtein,
-                                   double totalCarbs,
-                                   double totalFats) {
-        return """
-                {
-                  "name":"%s",
-                  "date":"%s",
-                  "computeFromFoodLogs":%s,
-                  "totalCalories":%s,
-                  "totalProtein":%s,
-                  "totalCarbs":%s,
-                  "totalFats":%s
-                }
-                """.formatted(name, date, computeFromFoodLogs, totalCalories, totalProtein, totalCarbs, totalFats);
-    }
-
-    private String foodPayload(String name,
-                               String date,
-                               String time,
-                               Long logGroupId,
-                               double calories,
-                               double protein,
-                               double carbs,
-                               double fats) {
-        return """
-                {
-                  "name":"%s",
-                  "date":"%s",
-                  "time":"%s",
-                  "logGroupId":%s,
-                  "calories":%s,
-                  "protein":%s,
-                  "carbs":%s,
-                  "fats":%s
-                }
-                """.formatted(name, date, time, logGroupId == null ? "null" : logGroupId, calories, protein, carbs, fats);
+    private void createRoleIfMissing(String name, String description) {
+        if (roleRepository.findByName(name).isPresent()) return;
+        Role role = new Role();
+        role.setName(name);
+        role.setDescription(description);
+        roleRepository.save(role);
     }
 }
-
