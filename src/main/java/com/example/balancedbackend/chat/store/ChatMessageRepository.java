@@ -7,6 +7,4 @@ import java.util.List;
 
 public interface ChatMessageRepository extends MongoRepository<ChatMessage, String> {
     List<ChatMessage> findTop100ByConversationKeyOrderByCreatedAtAsc(String conversationKey);
-
-    boolean existsByLegacySqlId(Long legacySqlId);
 }

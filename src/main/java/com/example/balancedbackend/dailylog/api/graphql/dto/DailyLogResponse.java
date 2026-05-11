@@ -1,4 +1,4 @@
-package com.example.balancedbackend.loggroup.api.graphql.dto;
+package com.example.balancedbackend.dailylog.api.graphql.dto;
 
 import com.example.balancedbackend.foodlog.api.dto.FoodLogResponse;
 import com.example.balancedbackend.loggroup.api.dto.LogGroupResponse;

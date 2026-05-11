@@ -1,6 +1,5 @@
 package com.example.balancedbackend.chat.service;
 
-import com.example.balancedbackend.audit.service.AuditService;
 import com.example.balancedbackend.auth.model.User;
 import com.example.balancedbackend.auth.store.UserRepository;
 import com.example.balancedbackend.chat.api.dto.ChatMessageRequest;
@@ -12,23 +11,19 @@ import com.example.balancedbackend.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.List;
 
 @Service
 public class ChatService {
     private final ChatMessageRepository chatMessageRepository;
     private final UserRepository userRepository;
-    private final AuditService auditService;
 
     public ChatService(
             ChatMessageRepository chatMessageRepository,
-            UserRepository userRepository,
-            AuditService auditService
+            UserRepository userRepository
     ) {
         this.chatMessageRepository = chatMessageRepository;
         this.userRepository = userRepository;
-        this.auditService = auditService;
     }
 
     public List<ChatMessageResponse> getConversation(long userId, long otherUserId) {
@@ -51,10 +46,8 @@ public class ChatService {
         message.setReceiverId(request.receiverId());
         message.setContent(request.content().trim());
         message.setCreatedAt(Instant.now());
-        message.setMetadata(Map.of("storage", "mongodb-document"));
 
         ChatMessage saved = chatMessageRepository.save(message);
-        auditService.logAction(senderId, "Sent chat message to user " + request.receiverId());
         return toResponse(saved);
     }
 

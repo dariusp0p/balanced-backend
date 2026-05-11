@@ -1,5 +1,6 @@
 package com.example.balancedbackend.auth.service;
 
+import com.example.balancedbackend.audit.service.AuditService;
 import com.example.balancedbackend.auth.api.dto.AuthResponse;
 import com.example.balancedbackend.auth.api.dto.LoginRequest;
 import com.example.balancedbackend.auth.api.dto.SignupRequest;
@@ -32,18 +33,21 @@ public class AuthService {
     private final UserRoleRepository userRoleRepository;
     private final InMemorySessionStore sessionStore;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
     private final long sessionTtlMinutes;
 
     public AuthService(UserRepository userRepository,
                        RoleRepository roleRepository,
                        UserRoleRepository userRoleRepository,
                        InMemorySessionStore sessionStore,
+                       AuditService auditService,
                        PasswordEncoder passwordEncoder,
                        @Value("${app.security.session-ttl-minutes:480}") long sessionTtlMinutes) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.userRoleRepository = userRoleRepository;
         this.sessionStore = sessionStore;
+        this.auditService = auditService;
         this.passwordEncoder = passwordEncoder;
         this.sessionTtlMinutes = sessionTtlMinutes;
     }
@@ -61,6 +65,7 @@ public class AuthService {
         User user = new User(request.name(), normalizedEmail, passwordEncoder.encode(request.password()));
         userRepository.save(user);
         assignDefaultRole(user);
+        auditService.logAction(user.getId(), "Signed up with email " + user.getEmail());
         return new SignupResponse("User registered successfully", toUserResponse(user));
     }
 
@@ -74,6 +79,7 @@ public class AuthService {
 
         Instant expiresAt = Instant.now().plus(sessionTtlMinutes, ChronoUnit.MINUTES);
         AuthSession session = sessionStore.createSession(user.getId(), expiresAt);
+        auditService.logAction(user.getId(), "Logged in");
 
         return new AuthResponse(session.token(), "Bearer", session.expiresAt(), toUserResponse(user));
     }

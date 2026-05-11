@@ -5,7 +5,6 @@ import com.example.balancedbackend.foodlog.api.dto.FoodLogResponse;
 import com.example.balancedbackend.foodlog.api.dto.PagedResponse;
 import com.example.balancedbackend.foodlog.service.FoodLogService;
 import com.example.balancedbackend.loggroup.api.dto.LogGroupResponse;
-import com.example.balancedbackend.loggroup.api.graphql.dto.DailyLogResponse;
 import com.example.balancedbackend.loggroup.api.graphql.dto.FoodLogPageResponse;
 import com.example.balancedbackend.loggroup.api.graphql.dto.LogGroupPageResponse;
 import com.example.balancedbackend.loggroup.model.MealType;
@@ -96,17 +95,6 @@ public class LogGroupGraphqlController {
     ) {
         long userId = requireUserId(authentication);
         return foodLogService.getByDay(userId, date);
-    }
-
-    @QueryMapping
-    public DailyLogResponse dailyLog(
-            @Argument String date,
-            Authentication authentication
-    ) {
-        long userId = requireUserId(authentication);
-        List<LogGroupResponse> groups = logGroupService.ensureDefaultGroupsForEmptyDay(userId, date);
-        List<FoodLogResponse> logs = foodLogService.getByDay(userId, date);
-        return new DailyLogResponse(date, groups, logs);
     }
 
     private long requireUserId(Authentication authentication) {

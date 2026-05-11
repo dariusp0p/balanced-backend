@@ -81,6 +81,8 @@ public class FoodLogService {
                 .map(this::toResponse)
                 .toList();
 
+        auditService.logAction(userId, "Viewed food logs page " + result.getNumber() + " size " + result.getSize());
+
         return new PagedResponse<>(
                 content,
                 result.getNumber(),
@@ -93,6 +95,8 @@ public class FoodLogService {
     public List<FoodLogResponse> getByDay(long userId, String date) {
         LocalDate selectedDate = parseDate(date);
 
+        auditService.logAction(userId, "Viewed food logs for day " + selectedDate);
+
         return foodLogRepository
                 .findAllByUserIdAndDateOrderByTimeDescIdDesc(userId, selectedDate)
                 .stream()
@@ -101,7 +105,9 @@ public class FoodLogService {
     }
 
     public FoodLogResponse getById(long userId, long id) {
-        return toResponse(getOwnedFoodLog(userId, id));
+        FoodLog foodLog = getOwnedFoodLog(userId, id);
+        auditService.logAction(userId, "Viewed food log " + foodLog.getId() + " (" + foodLog.getName() + ")");
+        return toResponse(foodLog);
     }
 
     public FoodLogResponse update(long userId, long id, FoodLogRequest request) {
@@ -139,6 +145,7 @@ public class FoodLogService {
 
     public FoodLogStatsResponse getStats(long userId) {
         List<FoodLog> logs = foodLogRepository.findAllByUserId(userId);
+        auditService.logAction(userId, "Viewed food log stats");
 
         double totalCalories = logs.stream().mapToDouble(FoodLog::getCalories).sum();
         double totalProtein = logs.stream().mapToDouble(FoodLog::getProtein).sum();

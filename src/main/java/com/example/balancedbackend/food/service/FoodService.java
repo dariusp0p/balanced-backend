@@ -69,6 +69,12 @@ public class FoodService {
                 .map(this::toResponse)
                 .toList();
 
+        auditService.logAction(
+                userId,
+                "Viewed foods page " + result.getNumber() + " size " + result.getSize() +
+                        (query == null || query.isBlank() ? "" : " query=" + query.trim())
+        );
+
         return new PagedResponse<>(
                 content,
                 result.getNumber(),
@@ -83,6 +89,7 @@ public class FoodService {
                 .filter(f -> f.getCreatedByUserId() == null || f.getCreatedByUserId().equals(userId))
                 .orElseThrow(() -> new NotFoundException("Food not found"));
 
+        auditService.logAction(userId, "Viewed food " + food.getId() + " (" + food.getName() + ")");
         return toResponse(food);
     }
 

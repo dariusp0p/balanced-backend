@@ -9,8 +9,6 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 @Document(collection = "chat_messages")
 @CompoundIndexes({
@@ -31,10 +29,6 @@ public class ChatMessage {
     private Long receiverId;
 
     private String content;
-
-    private Map<String, Object> metadata = new LinkedHashMap<>();
-
-    private Long legacySqlId;
 
     private Instant createdAt;
 }
