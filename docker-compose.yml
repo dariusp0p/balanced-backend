@@ -12,5 +12,19 @@ services:
     volumes:
       - balanced_postgres_data:/var/lib/postgresql/data
 
+  mongo:
+    image: mongo:7
+    container_name: balanced-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: balanced_mongo
+      MONGO_INITDB_ROOT_PASSWORD: balanced123
+      MONGO_INITDB_DATABASE: balanced_chat
+    ports:
+      - "27017:27017"
+    volumes:
+      - balanced_mongo_data:/data/db
+
 volumes:
   balanced_postgres_data:
+  balanced_mongo_data:
