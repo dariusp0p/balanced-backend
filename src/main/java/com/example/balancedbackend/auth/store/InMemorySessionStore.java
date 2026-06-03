@@ -38,8 +38,17 @@ public class InMemorySessionStore {
         return Optional.of(session);
     }
 
+    public AuthSession refreshSession(String token, Instant expiresAt) {
+        AuthSession refreshed = new AuthSession(token, sessions.get(token).userId(), expiresAt);
+        sessions.put(token, refreshed);
+        return refreshed;
+    }
+
     public void invalidate(String token) {
         sessions.remove(token);
     }
-}
 
+    public void invalidateAllForUser(long userId) {
+        sessions.entrySet().removeIf(entry -> entry.getValue().userId() == userId);
+    }
+}

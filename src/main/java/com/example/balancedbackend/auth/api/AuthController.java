@@ -4,6 +4,9 @@ import com.example.balancedbackend.auth.api.dto.AuthResponse;
 import com.example.balancedbackend.auth.api.dto.DailyNutritionTargetRequest;
 import com.example.balancedbackend.auth.api.dto.DailyNutritionTargetResponse;
 import com.example.balancedbackend.auth.api.dto.LoginRequest;
+import com.example.balancedbackend.auth.api.dto.PasswordRecoveryQuestionRequest;
+import com.example.balancedbackend.auth.api.dto.PasswordRecoveryQuestionResponse;
+import com.example.balancedbackend.auth.api.dto.PasswordRecoveryResetRequest;
 import com.example.balancedbackend.auth.api.dto.SignupRequest;
 import com.example.balancedbackend.auth.api.dto.SignupResponse;
 import com.example.balancedbackend.auth.api.dto.UserResponse;
@@ -11,6 +14,8 @@ import com.example.balancedbackend.auth.model.User;
 import com.example.balancedbackend.auth.store.RoleRepository;
 import com.example.balancedbackend.auth.service.AuthService;
 import com.example.balancedbackend.shared.security.SecuritySupport;
+import com.example.balancedbackend.shared.security.RequestIpResolver;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -46,8 +51,26 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<AuthResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        return ResponseEntity.ok(authService.login(request, RequestIpResolver.resolve(httpRequest)));
+    }
+
+    @PostMapping("/recovery-question")
+    public ResponseEntity<PasswordRecoveryQuestionResponse> recoveryQuestion(
+            @Valid @RequestBody PasswordRecoveryQuestionRequest request
+    ) {
+        return ResponseEntity.ok(authService.getRecoveryQuestion(request));
+    }
+
+    @PostMapping("/recover-password")
+    public ResponseEntity<AuthResponse> recoverPassword(
+            @Valid @RequestBody PasswordRecoveryResetRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        return ResponseEntity.ok(authService.recoverPassword(request, RequestIpResolver.resolve(httpRequest)));
     }
 
     @GetMapping("/me")

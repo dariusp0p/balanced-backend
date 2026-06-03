@@ -49,6 +49,8 @@ class AuthServiceTest {
     @Mock
     private AuditService auditService;
     @Mock
+    private AuthProtectionService authProtectionService;
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     private AuthService authService;
@@ -61,6 +63,7 @@ class AuthServiceTest {
                 userRoleRepository,
                 sessionStore,
                 auditService,
+                authProtectionService,
                 passwordEncoder,
                 480
         );
@@ -68,7 +71,14 @@ class AuthServiceTest {
 
     @Test
     void signupShouldFailWhenPasswordsDoNotMatch() {
-        SignupRequest request = new SignupRequest("User", "user@example.com", "secret123", "different");
+        SignupRequest request = new SignupRequest(
+                "User",
+                "user@example.com",
+                "secret123",
+                "different",
+                "What is your favorite food?",
+                "Pizza"
+        );
 
         assertThatThrownBy(() -> authService.signup(request))
                 .isInstanceOf(BadRequestException.class)
@@ -77,7 +87,14 @@ class AuthServiceTest {
 
     @Test
     void signupShouldFailWhenEmailAlreadyExistsCaseInsensitive() {
-        SignupRequest request = new SignupRequest("User", "USER@example.com", "secret123", "secret123");
+        SignupRequest request = new SignupRequest(
+                "User",
+                "USER@example.com",
+                "secret123",
+                "secret123",
+                "What is your favorite food?",
+                "Pizza"
+        );
         when(userRepository.existsByEmailIgnoreCase("user@example.com")).thenReturn(true);
 
         assertThatThrownBy(() -> authService.signup(request))
@@ -87,14 +104,24 @@ class AuthServiceTest {
 
     @Test
     void signupShouldCreateUserAssignRoleAndLogAction() {
-        SignupRequest request = new SignupRequest("Alice", "Alice@Example.com", "secret123", "secret123");
+        SignupRequest request = new SignupRequest(
+                "Alice",
+                "Alice@Example.com",
+                "secret123",
+                "secret123",
+                "What is your favorite food?",
+                "Pizza"
+        );
         when(userRepository.existsByEmailIgnoreCase("alice@example.com")).thenReturn(false);
-        when(passwordEncoder.encode("secret123")).thenReturn("encoded");
+        when(passwordEncoder.encode("secret123")).thenReturn("encoded-password");
+        when(passwordEncoder.encode("pizza")).thenReturn("encoded-answer");
         doAnswer(invocation -> {
             User user = invocation.getArgument(0);
             user.setId(42L);
             return user;
         }).when(userRepository).save(any(User.class));
+        when(sessionStore.createSession(eq(42L), any(Instant.class)))
+                .thenReturn(new AuthSession("signup-token", 42L, Instant.now().plusSeconds(3600)));
         Role userRole = new Role();
         userRole.setId(7L);
         userRole.setName("USER");
@@ -108,10 +135,13 @@ class AuthServiceTest {
         assertThat(response.user().email()).isEqualTo("alice@example.com");
         assertThat(response.user().roles()).containsExactly("USER");
         assertThat(response.user().dailyNutritionTarget().calories()).isEqualTo(2000);
+        assertThat(response.token()).isEqualTo("signup-token");
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(userCaptor.capture());
-        assertThat(userCaptor.getValue().getPasswordHash()).isEqualTo("encoded");
+        assertThat(userCaptor.getValue().getPasswordHash()).isEqualTo("encoded-password");
+        assertThat(userCaptor.getValue().getRecoveryQuestion()).isEqualTo("What is your favorite food?");
+        assertThat(userCaptor.getValue().getRecoveryAnswerHash()).isEqualTo("encoded-answer");
         verify(userRoleRepository).save(any());
         verify(auditService).logAction(42L, "Signed up with email alice@example.com");
     }
@@ -127,12 +157,14 @@ class AuthServiceTest {
                 .thenReturn(new AuthSession("token-123", 5L, expiresAt));
         when(roleRepository.findRoleNamesByUserId(5L)).thenReturn(List.of("USER"));
 
-        var response = authService.login(new LoginRequest("Test@Example.com", "secret123"));
+        var response = authService.login(new LoginRequest("Test@Example.com", "secret123"), "127.0.0.1");
 
         assertThat(response.token()).isEqualTo("token-123");
         assertThat(response.tokenType()).isEqualTo("Bearer");
         assertThat(response.user().id()).isEqualTo(5L);
         assertThat(response.user().email()).isEqualTo("test@example.com");
+        verify(authProtectionService).ensureLoginAllowed("127.0.0.1", "test@example.com");
+        verify(authProtectionService).clearLoginFailures("127.0.0.1", "test@example.com");
         verify(auditService).logAction(5L, "Logged in");
     }
 
@@ -140,7 +172,7 @@ class AuthServiceTest {
     void loginShouldFailForUnknownUser() {
         when(userRepository.findByEmailIgnoreCase("missing@example.com")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> authService.login(new LoginRequest("missing@example.com", "secret123")))
+        assertThatThrownBy(() -> authService.login(new LoginRequest("missing@example.com", "secret123"), "127.0.0.1"))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessageContaining("Invalid email or password");
     }
@@ -152,11 +184,41 @@ class AuthServiceTest {
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrong", "hashed")).thenReturn(false);
 
-        assertThatThrownBy(() -> authService.login(new LoginRequest("user@example.com", "wrong")))
+        assertThatThrownBy(() -> authService.login(new LoginRequest("user@example.com", "wrong"), "127.0.0.1"))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessageContaining("Invalid email or password");
 
         verify(sessionStore, never()).createSession(any(Long.class), any(Instant.class));
+    }
+
+    @Test
+    void recoverPasswordShouldReplacePasswordAndInvalidateSessions() {
+        User user = new User("Recovery User", "recover@example.com", "old-hash");
+        user.setId(12L);
+        user.setRecoveryQuestion("What is your favorite food?");
+        user.setRecoveryAnswerHash("answer-hash");
+        when(userRepository.findByEmailIgnoreCase("recover@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("pizza", "answer-hash")).thenReturn(true);
+        when(passwordEncoder.encode("newpass123")).thenReturn("new-hash");
+        when(roleRepository.findRoleNamesByUserId(12L)).thenReturn(List.of("USER"));
+        when(sessionStore.createSession(eq(12L), any(Instant.class)))
+                .thenReturn(new AuthSession("recovery-token", 12L, Instant.now().plusSeconds(3600)));
+
+        var response = authService.recoverPassword(
+                new com.example.balancedbackend.auth.api.dto.PasswordRecoveryResetRequest(
+                        "recover@example.com",
+                        "Pizza",
+                        "newpass123",
+                        "newpass123"
+                ),
+                "127.0.0.1"
+        );
+
+        assertThat(response.token()).isEqualTo("recovery-token");
+        verify(userRepository).save(user);
+        verify(sessionStore).invalidateAllForUser(12L);
+        verify(authProtectionService).clearRecoveryFailures("127.0.0.1", "recover@example.com");
+        verify(auditService).logAction(12L, "Recovered password and created a new session");
     }
 
     @Test
