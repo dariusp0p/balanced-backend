@@ -16,6 +16,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,16 +29,25 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
 
     private final InMemorySessionStore sessionStore;
     private final UserRepository userRepository;
+    private final long sessionTtlMinutes;
 
-    public SessionAuthenticationFilter(InMemorySessionStore sessionStore, UserRepository userRepository) {
+    public SessionAuthenticationFilter(
+            InMemorySessionStore sessionStore,
+            UserRepository userRepository,
+            @org.springframework.beans.factory.annotation.Value("${app.security.session-ttl-minutes:480}") long sessionTtlMinutes
+    ) {
         this.sessionStore = sessionStore;
         this.userRepository = userRepository;
+        this.sessionTtlMinutes = sessionTtlMinutes;
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-        return path.equals("/auth/login") || path.equals("/auth/signup");
+        return path.equals("/auth/login")
+                || path.equals("/auth/signup")
+                || path.equals("/auth/recovery-question")
+                || path.equals("/auth/recover-password");
     }
 
     @Override
@@ -53,6 +64,10 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
             if (session.isPresent()) {
                 Optional<User> user = userRepository.findById(session.get().userId());
                 if (user.isPresent()) {
+                    sessionStore.refreshSession(
+                            token,
+                            Instant.now().plus(sessionTtlMinutes, ChronoUnit.MINUTES)
+                    );
                     AuthenticatedUser principal = new AuthenticatedUser(
                             user.get().getId(),
                             user.get().getEmail(),
@@ -62,6 +77,8 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                             new UsernamePasswordAuthenticationToken(principal, null, List.of());
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
+                } else {
+                    sessionStore.invalidate(token);
                 }
             }
         }

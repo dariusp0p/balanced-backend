@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:17
-    container_name: balanced-postgres
+    container_name: balanced-postgres-1
     restart: unless-stopped
     environment:
       POSTGRES_DB: balanced_db
@@ -14,7 +14,7 @@ services:
 
   mongo:
     image: mongo:7
-    container_name: balanced-mongo
+    container_name: balanced-mongo-1
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: balanced_mongo

@@ -36,6 +36,12 @@ public class User {
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
+    @Column(name = "recovery_question")
+    private String recoveryQuestion;
+
+    @Column(name = "recovery_answer_hash")
+    private String recoveryAnswerHash;
+
     @Column(name = "first_name", nullable = false)
     private String firstName;
 
@@ -114,6 +120,11 @@ public class User {
 
     public String passwordHash() {
         return passwordHash;
+    }
+
+    public boolean hasRecoveryProfile() {
+        return recoveryQuestion != null && !recoveryQuestion.isBlank()
+                && recoveryAnswerHash != null && !recoveryAnswerHash.isBlank();
     }
 
     private String normalizeName(String value) {

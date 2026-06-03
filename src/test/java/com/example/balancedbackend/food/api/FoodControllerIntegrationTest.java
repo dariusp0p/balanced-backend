@@ -247,7 +247,9 @@ class FoodControllerIntegrationTest {
                                   "name":"%s",
                                   "email":"%s",
                                   "password":"secret123",
-                                  "confirmPassword":"secret123"
+                                  "confirmPassword":"secret123",
+                                  "recoveryQuestion":"What is your favorite food?",
+                                  "recoveryAnswer":"Pizza"
                                 }
                                 """.formatted(name, email)))
                 .andExpect(status().isCreated());

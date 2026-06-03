@@ -48,11 +48,14 @@ class AuthControllerIntegrationTest {
                                   "name":"Auth Tester",
                                   "email":"Auth.Tester@example.com",
                                   "password":"secret123",
-                                  "confirmPassword":"secret123"
+                                  "confirmPassword":"secret123",
+                                  "recoveryQuestion":"What is your favorite food?",
+                                  "recoveryAnswer":"Pizza"
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message").value("User registered successfully"))
+                .andExpect(jsonPath("$.token").isString())
                 .andExpect(jsonPath("$.user.email").value("auth.tester@example.com"))
                 .andExpect(jsonPath("$.user.roles[0]").value("USER"))
                 .andExpect(jsonPath("$.user.dailyNutritionTarget.calories").value(2000.0))
@@ -72,7 +75,9 @@ class AuthControllerIntegrationTest {
                                   "name":"Dup",
                                   "email":"DUP@example.com",
                                   "password":"secret123",
-                                  "confirmPassword":"secret123"
+                                  "confirmPassword":"secret123",
+                                  "recoveryQuestion":"What is your favorite food?",
+                                  "recoveryAnswer":"Pizza"
                                 }
                                 """))
                 .andExpect(status().isConflict())
@@ -112,6 +117,55 @@ class AuthControllerIntegrationTest {
                                 """))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("Invalid email or password"));
+    }
+
+    @Test
+    void recoveryQuestionAndPasswordResetShouldWork() throws Exception {
+        signUp("recover@example.com");
+
+        mockMvc.perform(post("/auth/recovery-question")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email":"recover@example.com"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recoveryQuestion").value("What is your favorite food?"));
+
+        mockMvc.perform(post("/auth/recover-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email":"recover@example.com",
+                                  "recoveryAnswer":" pizza ",
+                                  "newPassword":"newpass123",
+                                  "confirmPassword":"newpass123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isString());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email":"recover@example.com",
+                                  "password":"secret123"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email":"recover@example.com",
+                                  "password":"newpass123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isString());
     }
 
     @Test
@@ -193,7 +247,9 @@ class AuthControllerIntegrationTest {
                                   "name":"Test User",
                                   "email":"%s",
                                   "password":"secret123",
-                                  "confirmPassword":"secret123"
+                                  "confirmPassword":"secret123",
+                                  "recoveryQuestion":"What is your favorite food?",
+                                  "recoveryAnswer":"Pizza"
                                 }
                                 """.formatted(email)))
                 .andExpect(status().isCreated());
